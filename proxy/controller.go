@@ -15,7 +15,7 @@ const ControllerName = "proxy_controller"
 // Url defines the proxy handler path
 const Url = "inproc://" + ControllerName
 
-// Destination is the client connected to the handler of the client service.
+// The Destination is the client connected to the handler of the client service.
 // The Dealer is the Request from Router to the
 // Reply Controller.
 //
