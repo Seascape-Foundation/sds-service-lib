@@ -1,3 +1,50 @@
+> Edit it readme later.
+
+# LifeCycle
+When a service runs, it prepares itself.
+The preparation is composed of two steps.
+First, it creates a configuration based on the required parameters.
+Then, it fills them. 
+If a user passed a pre-defined configuration,
+then the process will validate and apply them.
+If there is no configuration, then it will create a random configuration.
+That random configuration is written to the path.
+
+When the service is prepared, it runs the manager. 
+The manager is set in the *"PREPARED"* state. 
+If the service has a parent service, then it will send the message to the parent.
+
+After running the manager, the service runs the dependency manager.
+The dependency manager running means three things.
+If the service is running, it will ask to acknowledge the parent.
+Acknowledging the means to ask permission to connect from the parent.
+If the service is not acknowledged, it will mark that service as failed.
+If the service is not running, it will check the binary.
+If the binary exists, the service will run that binary.
+If the binary does not exist, the dependency manager will install it.
+Then run it.
+The dependency manager is working with the nearby proxies and extensions.
+
+> As a parent, it passes an id, configuration and its own id as a parent.
+
+When the dependencies are all set, it updates the state to *"READY"*.
+When some dependencies are not set, it will mark itself as *"PARTIALLY_READY"*.
+
+When it's (partially) ready, the dependency manager creates a heartbeat tracker.
+This tracker is given to the manager.
+Then, the manager creates its own heartbeat, and sends the messages to the parent.
+If no parent is given, it won't set it.
+
+# Usage
+
+```go
+id := "application name"
+s := service.New(id)
+s.Prepare() // runs the manager
+s.RunDepManager()
+s.Run() // sets up
+```
+
 # Service Lib
 
 *Service Lib* is a library to create services on **SDS**. 

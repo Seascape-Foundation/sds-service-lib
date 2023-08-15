@@ -14,15 +14,17 @@ replace github.com/ahmetson/config-lib => D:/sds/config-lib
 
 replace github.com/ahmetson/handler-lib => D:/sds/handler-lib
 
+replace github.com/ahmetson/dev-lib => D:/sds/dev-lib
+
 require (
 	github.com/ahmetson/client-lib v0.0.0-20230814161235-c87ba71fcc40
 	github.com/ahmetson/common-lib v0.0.0-20230717140750-5e95e61d69c2
 	github.com/ahmetson/config-lib v0.0.0-20230814154521-44373928ec1b
+	github.com/ahmetson/dev-lib v0.0.0-20230815140608-471eb5cac3a6
 	github.com/ahmetson/handler-lib v0.0.0-20230814162522-8e780da024d7
 	github.com/ahmetson/log-lib v0.0.0-20230814152407-68a090e4a798
 	github.com/ahmetson/os-lib v0.0.0-20230814151458-0e1874b6df31
 	github.com/go-git/go-git/v5 v5.8.0
-	github.com/stretchr/testify v1.8.2
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -34,7 +36,6 @@ require (
 	github.com/charmbracelet/lipgloss v0.6.0 // indirect
 	github.com/charmbracelet/log v0.1.2 // indirect
 	github.com/cloudflare/circl v1.3.3 // indirect
-	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/emirpasic/gods v1.18.1 // indirect
 	github.com/ethereum/go-ethereum v1.10.25 // indirect
 	github.com/fsnotify/fsnotify v1.6.0 // indirect
@@ -60,7 +61,6 @@ require (
 	github.com/pelletier/go-toml/v2 v2.0.6 // indirect
 	github.com/phayes/freeport v0.0.0-20220201140144-74d24b5ae9f5 // indirect
 	github.com/pjbgf/sha1cd v0.3.0 // indirect
-	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/rivo/uniseg v0.2.0 // indirect
 	github.com/sergi/go-diff v1.1.0 // indirect
 	github.com/skeema/knownhosts v1.1.1 // indirect
@@ -81,7 +81,7 @@ require (
 	github.com/btcsuite/btcd/btcec/v2 v2.2.1 // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.1.0 // indirect
 	github.com/joho/godotenv v1.4.0 // indirect
-	github.com/pebbe/zmq4 v1.2.9
+	github.com/pebbe/zmq4 v1.2.9 // indirect
 	golang.org/x/crypto v0.9.0 // indirect
 	golang.org/x/sys v0.8.0 // indirect
 	golang.org/x/text v0.9.0 // indirect
