@@ -1,8 +1,10 @@
 // Package service is the primary service.
 // This package is calling out the orchestra. Then within that orchestra sets up
-// - handler
+// - handler manager
 // - proxies
 // - extensions
+// - config manager
+// - dep manager
 package service
 
 import (
@@ -11,6 +13,7 @@ import (
 	clientConfig "github.com/ahmetson/client-lib/config"
 	"github.com/ahmetson/common-lib/data_type/key_value"
 	"github.com/ahmetson/common-lib/message"
+	config2 "github.com/ahmetson/config-lib"
 	"github.com/ahmetson/dev-lib"
 	ctxConfig "github.com/ahmetson/dev-lib/config"
 	"github.com/ahmetson/handler-lib"
@@ -18,13 +21,12 @@ import (
 	handlerConfig "github.com/ahmetson/handler-lib/config"
 	"github.com/ahmetson/log-lib"
 	"github.com/ahmetson/os-lib/arg"
-	"github.com/ahmetson/os-lib/path"
 	"github.com/ahmetson/service-lib/config"
 	"github.com/ahmetson/service-lib/config/service"
 	"github.com/ahmetson/service-lib/config/service/converter"
 	"github.com/ahmetson/service-lib/config/service/pipeline"
 	"github.com/ahmetson/service-lib/orchestra/dev"
-	"os"
+	"slices"
 	"strings"
 	"sync"
 )
@@ -96,6 +98,14 @@ func New(id string) (*Service, error) {
 // AddController of category
 func (independent *Service) AddController(category string, controller handler.Interface) {
 	independent.Controllers.Set(category, controller)
+}
+
+func (independent *Service) Url() string {
+	return independent.url
+}
+
+func (independent *Service) Id() string {
+	return independent.id
 }
 
 // RequireProxy adds a proxy that's needed for this service to run.
