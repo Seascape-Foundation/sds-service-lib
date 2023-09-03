@@ -147,92 +147,8 @@ func (independent *Service) requiredControllerExtensions() []string {
 	return extensions
 }
 
-func (independent *Service) createHandlerConfiguration() error {
-	// validate the Controllers
-	for category, controllerInterface := range independent.Controllers {
-		c := controllerInterface.(handler.Interface)
-
-		controllerConfig := handlerConfig.NewController(c.ControllerType(), category)
-
-		sourceInstance, err := handlerConfig.NewInstance(controllerConfig.Category)
-		if err != nil {
-			return fmt.Errorf("service.NewInstance: %w", err)
-		}
-		controllerConfig.Instances = append(controllerConfig.Instances, *sourceInstance)
-		independent.Config.SetController(controllerConfig)
-	}
-	return nil
-}
-
-func (independent *Service) createConfiguration() error {
-	independent.Config = config.Empty(independent.id, independent.url, config.IndependentType)
-
-	if err := independent.createHandlerConfiguration(); err != nil {
-		return fmt.Errorf("createHandlerConfiguration: %w", err)
-	}
-
-	return nil
-}
-
-// prepareConfiguration prepares the configuration.
-func (independent *Service) prepareConfiguration(expectedType config.Type) error {
-	// validate the service itself
-	if err := independent.createConfiguration(); err != nil {
-		return fmt.Errorf("independent.createConfiguration: %w", err)
-	}
-
-	if err := independent.fillConfiguration(); err != nil {
-		return fmt.Errorf("independent.fillConfiguration: %w", err)
-	}
-
-	return nil
-}
-
-func (independent *Service) fillConfiguration() error {
-	exist, err := config.FileExist()
-	if err != nil {
-		return fmt.Errorf("config.Exist: %w", err)
-	}
-	if !exist {
-		return nil
-	}
-	config.SetDefault(independent.ctx.Config())
-	config.RegisterPath(independent.ctx.Config())
-
-	serviceConfig, err := config.Read(independent.ctx.Config())
-	if err != nil {
-		return fmt.Errorf("config.Read: %w", err)
-	}
-
-	if serviceConfig.Id != independent.Config.Id {
-		return fmt.Errorf("service type is overwritten. expected '%s', not '%s'", independent.Config.Type, serviceConfig.Type)
-	}
-
-	// validate the Controllers
-	for category, controllerInterface := range independent.Controllers {
-		c := controllerInterface.(handler.Interface)
-
-		controllerConfig, err := serviceConfig.GetController(category)
-		if err != nil {
-			return fmt.Errorf("serviceConfig.GetController(%s): %w", category, err)
-		}
-
-		if controllerConfig.Type != c.ControllerType() {
-			return fmt.Errorf("handler expected to be of '%s' type, not '%s'", c.ControllerType(), controllerConfig.Type)
-		}
-
-		if len(controllerConfig.Instances) == 0 {
-			return fmt.Errorf("missing %s handler instances", category)
-		}
-
-		if controllerConfig.Instances[0].Port == 0 {
-			return fmt.Errorf("the port should not be 0 in the source")
-		}
-	}
-
-	independent.Config = serviceConfig
-
-	return nil
+func (independent *Service) ConfigEngine() config2.Interface {
+	return independent.ctx.Config()
 }
 
 // lintPipelineConfiguration checks that proxy url and controllerName are valid.
@@ -315,24 +231,6 @@ func (independent *Service) runManager() error {
 	return nil
 }
 
-// Prepare the services by validating, linting the configurations, as well as setting up the dependencies
-func (independent *Service) Prepare() error {
-	if len(independent.Controllers) == 0 {
-		return fmt.Errorf("no Controllers. call service.AddController")
-	}
-
-	// validate the service itself
-	if err := independent.createConfiguration(); err != nil {
-		return fmt.Errorf("independent.createConfiguration: %w", err)
-	}
-
-	if err := independent.fillConfiguration(); err != nil {
-		return fmt.Errorf("independent.fillConfiguration: %w", err)
-	}
-
-	return nil
-}
-
 // RunManager the services by validating, linting the configurations, as well as setting up the dependencies
 func (independent *Service) RunManager(as config.Type) error {
 	if len(independent.Controllers) == 0 {
@@ -342,18 +240,9 @@ func (independent *Service) RunManager(as config.Type) error {
 	requiredExtensions := independent.requiredControllerExtensions()
 
 	//
-	// prepare the config with the service, it's controllers and instances.
-	// it doesn't prepare the proxies, pipelines and extensions
-	//----------------------------------------------------
-	err := independent.prepareConfiguration(as)
-	if err != nil {
-		return fmt.Errorf("prepareConfiguration: %w", err)
-	}
-
-	//
 	// prepare the orchestra for dependencies
 	//---------------------------------------------------
-	err = independent.Context.Run(independent.Logger)
+	err := independent.Context.Run(independent.Logger)
 	if err != nil {
 		return fmt.Errorf("orchestra.Run: %w", err)
 	}
@@ -473,44 +362,8 @@ closeContext:
 	return err
 }
 
-// BuildConfiguration is invoked from Run. It's passed if the --build-config flag was given.
-// This function creates a yaml config with the service parameters.
-func (independent *Service) BuildConfiguration() {
-	if !arg.Exist(arg.BuildConfiguration) {
-		return
-	}
-	relativePath, err := arg.Value(arg.Path)
-	if err != nil {
-		independent.Logger.Fatal("requires 'path' flag", "error", err)
-	}
-
-	url, err := arg.Value(arg.Url)
-	if err != nil {
-		independent.Logger.Fatal("requires 'url' flag", "error", err)
-	}
-
-	execPath, err := path.GetExecPath()
-	if err != nil {
-		independent.Logger.Fatal("path.GetExecPath", "error", err)
-	}
-
-	outputPath := path.GetPath(execPath, relativePath)
-
-	independent.Config.Url = url
-
-	err = independent.Context.SetConfig(outputPath, independent.Config)
-	if err != nil {
-		independent.Logger.Fatal("failed to write the proxy into the file", "error", err)
-	}
-
-	independent.Logger.Info("yaml config was generated", "output path", outputPath)
-
-	os.Exit(0)
-}
-
 // Run the service.
 func (independent *Service) Run() {
-	independent.BuildConfiguration()
 	var wg sync.WaitGroup
 
 	err := independent.runManager()
