@@ -117,13 +117,7 @@ func (independent *Service) RequireProxy(url string) {
 }
 
 func (independent *Service) IsProxyRequired(proxyUrl string) bool {
-	for _, url := range independent.RequiredProxies {
-		if strings.Compare(url, proxyUrl) == 0 {
-			return true
-		}
-	}
-
-	return false
+	return slices.Contains(independent.RequiredProxies, proxyUrl)
 }
 
 // A Pipeline creates a chain of the proxies.
