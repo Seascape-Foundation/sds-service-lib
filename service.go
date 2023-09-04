@@ -46,13 +46,27 @@ type Service struct {
 	manager         *handler.Controller // manage this service from other parts. it should be called before the orchestra runs
 }
 
-func New(id string) (*Service, error) {
+// New service with the parameters.
+// Parameter order: id, url, context type
+func New(params ...string) (*Service, error) {
+	id := ""
+	if len(params) > 0 {
+		id = params[0]
+	}
+	url := ""
+	if len(params) > 1 {
+		url = params[1]
+	}
+	contextType := ctxConfig.DevContext
+	if len(params) > 2 {
+		contextType = params[2]
+	}
 	logger, err := log.New(id, true)
 	if err != nil {
 		return nil, fmt.Errorf("log.New(%s): %w", id, err)
 	}
 
-	ctx, err := context.New(ctxConfig.DevContext)
+	ctx, err := context.New(contextType)
 	if err != nil {
 		return nil, fmt.Errorf("context.New(%s): %w", ctxConfig.DevContext, err)
 	}
@@ -64,8 +78,6 @@ func New(id string) (*Service, error) {
 			return nil, fmt.Errorf("arg.Value(--%s): %w", config.IdFlag, err)
 		}
 	}
-
-	url := ""
 	if arg.Exist(config.UrlFlag) {
 		url, err = arg.Value(config.UrlFlag)
 		if err != nil {
