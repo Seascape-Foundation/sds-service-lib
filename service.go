@@ -34,7 +34,7 @@ type Service struct {
 	Logger             *log.Logger
 	id                 string
 	url                string
-	parentUrl          string
+	parentId           string
 	manager            *manager.Manager // manage this service from other parts
 	// as it should be called before the orchestra runs
 }
@@ -51,9 +51,11 @@ func New(params ...string) (*Service, error) {
 		url = params[1]
 	}
 	contextType := ctxConfig.DevContext
+
 	if len(params) > 2 {
 		contextType = params[2]
 	}
+
 	logger, err := log.New(id, true)
 	if err != nil {
 		return nil, fmt.Errorf("log.New(%s): %w", id, err)
@@ -72,9 +74,9 @@ func New(params ...string) (*Service, error) {
 		url = arg.FlagValue(config.UrlFlag)
 	}
 
-	parentUrl := ""
+	parentId := ""
 	if arg.FlagExist(config.ParentFlag) {
-		parentUrl = arg.FlagValue(config.ParentFlag)
+		parentId = arg.FlagValue(config.ParentFlag)
 	}
 
 	m := manager.New(id, url)
@@ -90,7 +92,7 @@ func New(params ...string) (*Service, error) {
 		RequiredProxies: []string{},
 		url:             url,
 		id:              id,
-		parentUrl:       parentUrl,
+		parentId:        parentId,
 	}
 
 	return independent, nil
