@@ -502,6 +502,20 @@ func (independent *Service) setHandlerClient(c base.Interface) error {
 	return nil
 }
 
+// startHandler sets the log into the handler which is prepared already.
+// then, starts it.
+func (independent *Service) startHandler(handler base.Interface) error {
+	if err := handler.SetLogger(independent.Logger.Child(handler.Config().Id)); err != nil {
+		return fmt.Errorf("handler(id: '%s').SetLogger: %w", handler.Config().Id, err)
+	}
+
+	if err := handler.Start(); err != nil {
+		return fmt.Errorf("handler(category: '%s').Start: %w", handler.Config().Category, err)
+	}
+
+	return nil
+}
+
 // Run the service.
 func (independent *Service) Run() error {
 	var wg sync.WaitGroup
@@ -527,14 +541,8 @@ func (independent *Service) Run() error {
 			goto errOccurred
 		}
 
-		if err = handler.SetLogger(independent.Logger.Child(handler.Config().Id)); err != nil {
-			err = fmt.Errorf("handler('%s').SetLogger: %w", handler.Config().Id, err)
-			goto errOccurred
-		}
-
-		err = handler.Start()
-		if err != nil {
-			err = fmt.Errorf("handler('%s').Start: %w", category, err)
+		if err = independent.startHandler(handler); err != nil {
+			err = fmt.Errorf("startHandler: %w", err)
 			goto errOccurred
 		}
 	}
