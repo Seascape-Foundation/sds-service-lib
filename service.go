@@ -381,7 +381,85 @@ closeContext:
 	return err
 }
 
-// prepareConfig of this service. if it doesn't exist, create it.
+func (independent *Service) generateConfig() error {
+	configClient := independent.ctx.Config()
+
+	generatedConfig, err := configClient.GenerateService(independent.id, independent.url, independent.Type)
+	if err != nil {
+		return fmt.Errorf("configClient.GenerateService('%s', '%s', '%s'): %w", independent.id, independent.url, independent.Type, err)
+	}
+
+	// Get all handlers and add them into the service
+	for category, raw := range independent.Handlers {
+		handler := raw.(base.Interface)
+		generatedHandler, err := configClient.GenerateHandler(handler.Type(), category, false)
+		if err != nil {
+			return fmt.Errorf("configClient.GenerateHandler('%s', '%s', internal: false): %w", handler.Type(), category, err)
+		}
+
+		handler.SetConfig(generatedHandler)
+
+		generatedConfig.SetHandler(generatedHandler)
+	}
+
+	// Some handlers were generated and added into generated service config.
+	// Notify the config engine to update the service.
+	if len(independent.Handlers) > 0 {
+		if err := configClient.SetService(generatedConfig); err != nil {
+			return fmt.Errorf("configClient.SetService('generated'): %w", err)
+		}
+	}
+
+	independent.config = generatedConfig
+
+	return nil
+}
+
+// lintConfig gets the configuration from the context and sets them in the service and handler.
+func (independent *Service) lintConfig() error {
+	configClient := independent.ctx.Config()
+
+	returnedService, err := configClient.Service(independent.id)
+	if err != nil {
+		return fmt.Errorf("configClient.Service('%s', '%s', '%s'): %w", independent.id, independent.url, independent.Type, err)
+	}
+
+	if returnedService.Url != independent.url {
+		independent.url = returnedService.Url
+	}
+	if returnedService.Type != independent.Type {
+		independent.Type = returnedService.Type
+	}
+
+	for category, raw := range independent.Handlers {
+		handler := raw.(base.Interface)
+
+		returnedHandler, err := returnedService.HandlerByCategory(category)
+		if err != nil {
+			generatedHandler, err := configClient.GenerateHandler(handler.Type(), category, false)
+			if err != nil {
+				return fmt.Errorf("configClient.GenerateHandler('%s', '%s', internal: false): %w", handler.Type(), category, err)
+			}
+
+			handler.SetConfig(generatedHandler)
+
+			returnedService.SetHandler(generatedHandler)
+			if err := configClient.SetService(returnedService); err != nil {
+				return fmt.Errorf("configClient.SetService('returned'): %w", err)
+			}
+		} else {
+			handler.SetConfig(returnedHandler)
+		}
+	}
+
+	independent.config = returnedService
+
+	return nil
+}
+
+// prepareConfig sets the configuration of this service and handlers.
+// if the configuration doesn't exist, generates the service and handler.
+// the returned configuration from the context is linted into service and handler.
 func (independent *Service) prepareConfig() error {
 	configClient := independent.ctx.Config()
 
@@ -390,68 +468,16 @@ func (independent *Service) prepareConfig() error {
 	if err != nil {
 		return fmt.Errorf("configClient.ServiceExist('%s'): %w", independent.id, err)
 	}
+
 	if !exist {
-		generatedConfig, err := configClient.GenerateService(independent.id, independent.url, independent.Type)
-		if err != nil {
-			return fmt.Errorf("configClient.GenerateService('%s', '%s', '%s'): %w", independent.id, independent.url, independent.Type, err)
+		if err = independent.generateConfig(); err != nil {
+			return fmt.Errorf("generateConfig: %w", err)
 		}
-		independent.config = generatedConfig
+		return nil
+	}
 
-		// Get all handlers and add them into the service
-		for category, raw := range independent.Handlers {
-			handler := raw.(base.Interface)
-			generatedHandler, err := configClient.GenerateHandler(handler.Type(), category, false)
-			if err != nil {
-				return fmt.Errorf("configClient.GenerateHandler('%s', '%s', internal: false): %w", handler.Type(), category, err)
-			}
-
-			handler.SetConfig(generatedHandler)
-
-			generatedConfig.SetHandler(generatedHandler)
-		}
-
-		// Some handlers were generated and added into generated service config.
-		// Notify the config engine to update the service.
-		if len(independent.Handlers) > 0 {
-			if err := configClient.SetService(generatedConfig); err != nil {
-				return fmt.Errorf("configClient.SetService('generated'): %w", err)
-			}
-		}
-	} else {
-		returnedService, err := configClient.Service(independent.id)
-		if err != nil {
-			return fmt.Errorf("configClient.Service('%s', '%s', '%s'): %w", independent.id, independent.url, independent.Type, err)
-		}
-
-		if returnedService.Url != independent.url {
-			independent.url = returnedService.Url
-		}
-		if returnedService.Type != independent.Type {
-			independent.Type = returnedService.Type
-		}
-
-		for category, raw := range independent.Handlers {
-			handler := raw.(base.Interface)
-
-			returnedHandler, err := returnedService.HandlerByCategory(category)
-			if err != nil {
-				generatedHandler, err := configClient.GenerateHandler(handler.Type(), category, false)
-				if err != nil {
-					return fmt.Errorf("configClient.GenerateHandler('%s', '%s', internal: false): %w", handler.Type(), category, err)
-				}
-
-				handler.SetConfig(generatedHandler)
-
-				returnedService.SetHandler(generatedHandler)
-				if err := configClient.SetService(returnedService); err != nil {
-					return fmt.Errorf("configClient.SetService('returned'): %w", err)
-				}
-			} else {
-				handler.SetConfig(returnedHandler)
-			}
-		}
-
-		independent.config = returnedService
+	if err = independent.lintConfig(); err != nil {
+		return fmt.Errorf("lintConfig: %w", err)
 	}
 
 	return nil
@@ -465,13 +491,12 @@ func (independent *Service) Run() error {
 		return fmt.Errorf("no Handlers. call service.SetHandler")
 	}
 
-	err := independent.prepareConfig()
-	if err != nil {
+	if err := independent.prepareConfig(); err != nil {
 		return fmt.Errorf("prepareConfig: %w", err)
 	}
 
 	m := manager.New(independent.config.Manager)
-	err = m.SetLogger(independent.Logger)
+	err := m.SetLogger(independent.Logger)
 	if err != nil {
 		return fmt.Errorf("manager.SetLogger: %w", err)
 	}
