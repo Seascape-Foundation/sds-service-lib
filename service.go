@@ -26,7 +26,7 @@ import (
 
 // Service keeps all necessary parameters of the service.
 type Service struct {
-	Config             *serviceConfig.Service
+	config             *serviceConfig.Service
 	ctx                context.Interface // context handles the configuration and dependencies
 	Handlers           key_value.KeyValue
 	RequiredProxies    []string // url => orchestra type
@@ -158,20 +158,20 @@ func (independent *Service) requiredControllerExtensions() []string {
 }
 
 // lintPipelineConfiguration checks that proxy url and controllerName are valid.
-// Then, in the Config, it makes sure that dependency is linted.
+// Then, in the config, it makes sure that dependency is linted.
 //func (independent *Service) preparePipelineConfigurations() error {
 //	servicePipeline := pipeline.FindServiceEnd(independent.pipelines)
 //
 //	if servicePipeline != nil {
-//		servicePipeline.End.Url = independent.Config.Url
+//		servicePipeline.End.Url = independent.config.Url
 //		independent.Logger.Info("dont forget to update the yaml with the controllerPipeline service end url")
-//		err := pipeline.LintToService(independent.Context, independent.Config, servicePipeline)
+//		err := pipeline.LintToService(independent.Context, independent.config, servicePipeline)
 //		if err != nil {
 //			return fmt.Errorf("pipeline.LintToService: %w", err)
 //		}
 //	}
 //
-//	err := pipeline.LintToControllers(independent.Context, independent.Config, independent.pipelines)
+//	err := pipeline.LintToControllers(independent.Context, independent.config, independent.pipelines)
 //	if err != nil {
 //		return fmt.Errorf("pipeline.LintToControllers: %w", err)
 //	}
@@ -255,7 +255,7 @@ func (independent *Service) RunManager() error {
 		var controllerConfig *handlerConfig.Handler
 		var controllerExtensions []string
 
-		controllerConfig, err = independent.Config.Handler(name)
+		controllerConfig, err = independent.config.Handler(name)
 		if err != nil {
 			err = fmt.Errorf("c '%s' registered in the service, no config found: %w", name, err)
 			goto closeContext
@@ -275,7 +275,7 @@ func (independent *Service) RunManager() error {
 		}
 		controllerExtensions = c.DepIds()
 		for _, extensionUrl := range controllerExtensions {
-			requiredExtension := independent.Config.ExtensionByUrl(extensionUrl)
+			requiredExtension := independent.config.ExtensionByUrl(extensionUrl)
 			err = c.AddDepByService(requiredExtension)
 			if err != nil {
 				err = fmt.Errorf("c.AddDepByService: %w", err)
@@ -388,7 +388,7 @@ errOccurred:
 //func (independent *Service) prepareProxy(dep *dev.Dep) error {
 //	// todo find the proxy url by it's id in the services list.
 //	// the config.Proxy() accepts id not a url.
-//	proxyConfiguration := independent.Config.Proxy(dep.Url())
+//	proxyConfiguration := independent.config.Proxy(dep.Url())
 //
 //	independent.Logger.Info("prepare proxy", "id", proxyConfiguration.Id)
 //	//err := dep.Run(proxyConfiguration.Instances[0].Port, independent.Logger)
@@ -403,7 +403,7 @@ errOccurred:
 ////
 //// if dependency doesn't exist, it will be downloaded
 //func (independent *Service) prepareExtension(dep *dev.Dep) error {
-//	extensionConfiguration := independent.Config.ExtensionByUrl(dep.Url())
+//	extensionConfiguration := independent.config.ExtensionByUrl(dep.Url())
 //
 //	independent.Logger.Info("prepare extension", "url", extensionConfiguration.Url, "port", extensionConfiguration.Port)
 //	err := dep.Run(extensionConfiguration.Port, independent.Logger)
@@ -433,9 +433,9 @@ errOccurred:
 //	//	return fmt.Errorf("config.ServiceToProxy: %w", err)
 //	//}
 //
-//	//proxyConfiguration := independent.Config.GetProxy(dep.Url())
+//	//proxyConfiguration := independent.config.GetProxy(dep.Url())
 //	//if proxyConfiguration == nil {
-//	//	independent.Config.SetProxy(&converted)
+//	//	independent.config.SetProxy(&converted)
 //	//} else {
 //	//	if strings.Compare(proxyConfiguration.Url, converted.Url) != 0 {
 //	//		return fmt.Errorf("the proxy urls are not matching. in your config: %s, in the deps: %s", proxyConfiguration.Url, converted.Url)
@@ -475,9 +475,9 @@ errOccurred:
 //	//	return fmt.Errorf("config.ServiceToExtension: %w", err)
 //	//}
 //	//
-//	//extensionConfiguration := independent.Config.GetExtension(dep.Url())
+//	//extensionConfiguration := independent.config.GetExtension(dep.Url())
 //	//if extensionConfiguration == nil {
-//	//	independent.Config.SetExtension(&converted)
+//	//	independent.config.SetExtension(&converted)
 //	//} else {
 //	//	if strings.Compare(extensionConfiguration.Url, converted.Url) != 0 {
 //	//		return fmt.Errorf("the extension url in your '%s' config not matches to '%s' in the dependency", extensionConfiguration.Url, converted.Url)
