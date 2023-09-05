@@ -1,51 +1,48 @@
 # Tutorial
 
-Let's start with the hello world:
+Let's start with the classic *"Hello World"*:
 
 ```go
-package main
+package service
 
 import (
 	"github.com/ahmetson/client-lib"
 	"github.com/ahmetson/common-lib/data_type/key_value"
 	"github.com/ahmetson/common-lib/message"
-	"github.com/ahmetson/log-lib"
+	"github.com/ahmetson/dev-lib/base/config"
+	"github.com/ahmetson/handler-lib/replier"
 	"github.com/ahmetson/service-lib"
 )
 
-func onHello(req message.Request, _ *log.Logger, _ ...*client.ClientSocket) message.Reply {
-	repl := key_value.Empty().Set("message", "hello world")
+func onHello(req message.Request) message.Reply {
+	repl := key_value.Empty().
+		Set("message", "hello world")
 
 	return req.Ok(repl)
 }
 
 func main() {
-	appName := "sample-app"
-	app, _ := service.New(appName)
+	serviceId := "sample-app"
+	serviceUrl := "github.com/ahmetson/url"
+	app, _ := service.New(serviceId, serviceUrl, config.DevContext)
 
-	route := command.NewRoute("hello", onHello)
+	server := replier.New()
+	server.Route("hello", onHello)
 
-	server, _ := handler.Replier(app.Logger)
-	server.AddRoute(route)
-	app.AddController("server", server)
+	app.AddController("main", server)
 	app.RequireProxy("github.com/ahmetson/http-proxy")
-	app.Prepare()
 	app.Run()
 }
 ```
 
-You see it's twenty lines of code. But that hides a lot of stuff of this
-powerful tool.
+The code is ten lines of code. 
+It creates a service in the `config.DevContext`.
+Then it adds a server and a proxy into the service.
 
-We always create a service with an id.
-Once the service is created, we always add the handler.
-After the handler, we add the proxy which is optional.
-Then we prepare it.
-And then we run our service.
-
-The handler is adding a route which is the command and a handler of the command.
+Lastly, the server has a route which calls `onHello` function for `hello` command.
 
 Compile, and run it. It should work fine.
+The service will download the proxy from the URL that you provided.
 
 ----
 
@@ -55,12 +52,52 @@ Create a new extension.
 Then add it as:
 
 ```go
-	app, _ := service.New("counter")
-	app.AddExtension("github.com/ahmetson/counter-extension")
+package service
+
+import (
+	"fmt"
+	"github.com/ahmetson/client-lib"
+	"github.com/ahmetson/common-lib/message"
+	"github.com/ahmetson/dev-lib/base/config"
+	"github.com/ahmetson/handler-lib/replier"
+	"github.com/ahmetson/service-lib"
+)
+
+func onHelloName(req message.Request, db *client.Socket) message.Reply {
+	next := req.Next("get-name", req.Parameters)
+	reply, err := db.Request(next)
+	if err != nil {
+		return req.Fail(fmt.Sprintf("get-name failed: %v", err))
+	}
+
+	if !reply.IsOk() {
+		return req.Fail(fmt.Sprintf("reply.Message: %s", reply.Message))
+	}
+
+	return req.Ok(reply.Parameters)
+}
+
+func main() {
+	app, _ := service.New("app", "github.com/ahmetson/app", config.DevContext)
+
+	server := replier.New()
+	ext := "github.com/ahmetson/mysql-extension"
+	server.Route("hello-name", onHelloName, ext)
 	
-	app.Prepare()
+	app.AddController("main", server)
+	app.RequireProxy("github.com/ahmetson/http-proxy")
 	app.Run()
+}
+
 ```
+
+Note, that the `hello-name` handler function requires an extension.
+We pass this extension by its url.
+
+In total, our app depends on two binaries: `http-proxy` and `mysql-extension`.
+The `mysql-extension` itself depends on the `mysql` as well. 
+But that's the problem of the extension. 
+In our service, we don't worry about anything else.
 
 ---
 
