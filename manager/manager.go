@@ -12,13 +12,11 @@ import (
 	"github.com/ahmetson/handler-lib/manager_client"
 	syncReplier "github.com/ahmetson/handler-lib/sync_replier"
 	"github.com/ahmetson/log-lib"
-	"github.com/ahmetson/service-lib/config"
 )
 
 // The Manager keeps all necessary parameters of the service.
 type Manager struct {
-	Id             string
-	Url            string
+	serviceUrl     string
 	handler        base.Interface // manage this service from other parts. it should be called before the orchestra runs
 	logger         *log.Logger
 	handlerClients []manager_client.Interface
@@ -28,23 +26,23 @@ type Manager struct {
 
 // New service with the parameters.
 // Parameter order: id, url, context type
-func New(id string, url string) *Manager {
+func New(client *clientConfig.Client) *Manager {
 	handler := syncReplier.New()
 
 	h := &Manager{
-		Id:      id,
-		Url:     url,
-		handler: syncReplier.New(),
+		handler:    syncReplier.New(),
+		serviceUrl: client.ServiceUrl,
 	}
 
-	handler.SetConfig(h.Config())
+	managerConfig := h.Config(client)
+	handler.SetConfig(managerConfig)
 
 	return h
 }
 
 // onClose closing all the dependencies in the orchestra as well as all handlers
 func (m *Manager) onClose(req message.Request) message.Reply {
-	m.logger.Info("service received a signal to close", "service", m.Url)
+	m.logger.Info("service received a signal to close", "service url", m.serviceUrl)
 
 	// closing all handlers
 	for _, client := range m.handlerClients {
@@ -72,8 +70,14 @@ func (m *Manager) onClose(req message.Request) message.Reply {
 }
 
 // Config of the manager
-func (m *Manager) Config() *handlerConfig.Handler {
-	return config.InternalConfiguration(config.ManagerName(m.Url))
+func (m *Manager) Config(client *clientConfig.Client) *handlerConfig.Handler {
+	return &handlerConfig.Handler{
+		Type:           handlerConfig.SyncReplierType,
+		Category:       "service",
+		InstanceAmount: 1,
+		Port:           client.Port,
+		Id:             client.Id,
+	}
 }
 
 func (m *Manager) SetLogger(parent *log.Logger) error {
