@@ -475,7 +475,11 @@ func (independent *Service) prepareConfig() error {
 	return nil
 }
 
+// newManager creates a manager of the service.
 func (independent *Service) newManager() error {
+	if independent.config == nil {
+		return fmt.Errorf("independent.config is nill")
+	}
 	m := manager.New(independent.config.Manager)
 	err := m.SetLogger(independent.Logger)
 	if err != nil {
@@ -485,6 +489,7 @@ func (independent *Service) newManager() error {
 	return nil
 }
 
+// setHandlerClient creates a handler manager clients and sets them into the service manager.
 func (independent *Service) setHandlerClient(c base.Interface) error {
 	handlerClient, err := manager_client.New(c.Config())
 	if err != nil {
