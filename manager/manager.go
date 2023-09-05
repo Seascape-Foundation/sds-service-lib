@@ -44,6 +44,11 @@ func New(client *clientConfig.Client) *Manager {
 	return h
 }
 
+// Close the manager itself
+func (m *Manager) Close() error {
+	return m.handler.Close()
+}
+
 // onClose closing all the dependencies in the orchestra as well as all handlers
 func (m *Manager) onClose(req message.Request) message.Reply {
 	m.logger.Info("service received a signal to close", "service url", m.serviceUrl)
