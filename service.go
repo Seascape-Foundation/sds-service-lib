@@ -485,6 +485,16 @@ func (independent *Service) newManager() error {
 	return nil
 }
 
+func (independent *Service) setHandlerClient(c base.Interface) error {
+	handlerClient, err := manager_client.New(c.Config())
+	if err != nil {
+		return fmt.Errorf("manager_client.New('%s'): %w", c.Config().Category, err)
+	}
+	independent.manager.SetHandlerClients([]manager_client.Interface{handlerClient})
+
+	return nil
+}
+
 // Run the service.
 func (independent *Service) Run() error {
 	var wg sync.WaitGroup
@@ -504,26 +514,22 @@ func (independent *Service) Run() error {
 	var err error
 
 	for category, raw := range independent.Handlers {
-		c := raw.(base.Interface)
-
-		var handlerClient manager_client.Interface
-		handlerClient, err = manager_client.New(c.Config())
-		if err != nil {
+		handler := raw.(base.Interface)
+		if err = independent.setHandlerClient(handler); err != nil {
 			err = fmt.Errorf("manager_client.New('%s'): %w", category, err)
 			goto errOccurred
 		}
 
-		if err = c.SetLogger(independent.Logger.Child(c.Config().Id)); err != nil {
-			err = fmt.Errorf("handler('%s').SetLogger: %w", c.Config().Id, err)
+		if err = handler.SetLogger(independent.Logger.Child(handler.Config().Id)); err != nil {
+			err = fmt.Errorf("handler('%s').SetLogger: %w", handler.Config().Id, err)
 			goto errOccurred
 		}
 
-		err = c.Start()
+		err = handler.Start()
 		if err != nil {
 			err = fmt.Errorf("handler('%s').Start: %w", category, err)
 			goto errOccurred
 		}
-		independent.manager.SetHandlerClients([]manager_client.Interface{handlerClient})
 	}
 
 	// todo
