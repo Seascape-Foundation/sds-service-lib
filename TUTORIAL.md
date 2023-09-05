@@ -9,10 +9,8 @@ import (
 	"github.com/ahmetson/client-lib"
 	"github.com/ahmetson/common-lib/data_type/key_value"
 	"github.com/ahmetson/common-lib/message"
-	"github.com/ahmetson/handler-lib/command"
 	"github.com/ahmetson/log-lib"
 	"github.com/ahmetson/service-lib"
-	"github.com/ahmetson/handler-lib"
 )
 
 func onHello(req message.Request, _ *log.Logger, _ ...*client.ClientSocket) message.Reply {

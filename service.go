@@ -13,12 +13,12 @@ import (
 	clientConfig "github.com/ahmetson/client-lib/config"
 	"github.com/ahmetson/common-lib/data_type/key_value"
 	"github.com/ahmetson/common-lib/message"
-	config2 "github.com/ahmetson/config-lib"
 	"github.com/ahmetson/dev-lib"
-	ctxConfig "github.com/ahmetson/dev-lib/config"
-	"github.com/ahmetson/handler-lib"
-	"github.com/ahmetson/handler-lib/command"
+	ctxConfig "github.com/ahmetson/dev-lib/base/config"
+	"github.com/ahmetson/handler-lib/base"
 	handlerConfig "github.com/ahmetson/handler-lib/config"
+	handleManager "github.com/ahmetson/handler-lib/manager_client"
+	syncReplier "github.com/ahmetson/handler-lib/sync_replier"
 	"github.com/ahmetson/log-lib"
 	"github.com/ahmetson/os-lib/arg"
 	"github.com/ahmetson/service-lib/config"
@@ -34,7 +34,8 @@ import (
 // Service keeps all necessary parameters of the service.
 type Service struct {
 	Config          *config.Service
-	ctx             context.Interface
+	ctx             context.Interface // context handles the configuration and dependencies
+	handlerClient   handleManager.Interface
 	Controllers     key_value.KeyValue
 	pipelines       []*pipeline.Pipeline // Pipeline beginning: url => [Pipes]
 	RequiredProxies []string             // url => orchestra type
@@ -43,7 +44,7 @@ type Service struct {
 	id              string
 	url             string
 	parentUrl       string
-	manager         *handler.Controller // manage this service from other parts. it should be called before the orchestra runs
+	manager         base.Interface // manage this service from other parts. it should be called before the orchestra runs
 }
 
 // New service with the parameters.
@@ -72,25 +73,16 @@ func New(params ...string) (*Service, error) {
 	}
 
 	// let's validate the parameters of the service
-	if arg.Exist(config.IdFlag) {
-		id, err = arg.Value(config.IdFlag)
-		if err != nil {
-			return nil, fmt.Errorf("arg.Value(--%s): %w", config.IdFlag, err)
-		}
+	if arg.FlagExist(config.IdFlag) {
+		id = arg.FlagValue(config.IdFlag)
 	}
-	if arg.Exist(config.UrlFlag) {
-		url, err = arg.Value(config.UrlFlag)
-		if err != nil {
-			return nil, fmt.Errorf("arg.Value(--%s): %w", config.UrlFlag, err)
-		}
+	if arg.FlagExist(config.UrlFlag) {
+		url = arg.FlagValue(config.UrlFlag)
 	}
 
 	parentUrl := ""
-	if arg.Exist(config.ParentFlag) {
-		parentUrl, err = arg.Value(config.ParentFlag)
-		if err != nil {
-			return nil, fmt.Errorf("arg.Value(--%s): %w", config.ParentFlag, err)
-		}
+	if arg.FlagExist(config.ParentFlag) {
+		parentUrl = arg.FlagValue(config.ParentFlag)
 	}
 
 	independent := &Service{
@@ -108,7 +100,7 @@ func New(params ...string) (*Service, error) {
 }
 
 // AddController of category
-func (independent *Service) AddController(category string, controller handler.Interface) {
+func (independent *Service) AddController(category string, controller base.Interface) {
 	independent.Controllers.Set(category, controller)
 }
 
@@ -152,15 +144,11 @@ func (independent *Service) Pipeline(pipeEnd *pipeline.PipeEnd, proxyUrls ...str
 func (independent *Service) requiredControllerExtensions() []string {
 	var extensions []string
 	for _, controllerInterface := range independent.Controllers {
-		c := controllerInterface.(handler.Interface)
-		extensions = append(extensions, c.RequiredExtensions()...)
+		c := controllerInterface.(base.Interface)
+		extensions = append(extensions, c.DepIds()...)
 	}
 
 	return extensions
-}
-
-func (independent *Service) ConfigEngine() config2.Interface {
-	return independent.ctx.Config()
 }
 
 // lintPipelineConfiguration checks that proxy url and controllerName are valid.
@@ -186,14 +174,14 @@ func (independent *Service) preparePipelineConfigurations() error {
 }
 
 // onClose closing all the dependencies in the orchestra.
-func (independent *Service) onClose(request message.Request, logger *log.Logger, _ ...*client.ClientSocket) message.Reply {
+func (independent *Service) onClose(request message.Request, logger *log.Logger, _ ...*client.Socket) message.Reply {
 	logger.Info("service received a signal to close",
 		"service", independent.Config.Url,
 		"todo", "close all controllers",
 	)
 
 	for name, controllerInterface := range independent.Controllers {
-		c := controllerInterface.(handler.Interface)
+		c := controllerInterface.(base.Interface)
 		if c == nil {
 			continue
 		}
@@ -219,32 +207,29 @@ func (independent *Service) onClose(request message.Request, logger *log.Logger,
 //
 // The logger is the handler logger as it is. The orchestra will create its own logger from it.
 func (independent *Service) runManager() error {
-	replier, err := handler.SyncReplier(independent.Logger.Child("manager"))
-	if err != nil {
-		return fmt.Errorf("handler.SyncReplierType: %w", err)
-	}
+	replier := syncReplier.New()
 
 	conf := config.InternalConfiguration(config.ManagerName(independent.Config.Url))
-	replier.AddConfig(conf, independent.Config.Url)
+	replier.SetConfig(conf)
+	if err := replier.SetLogger(independent.Logger.Child("manager")); err != nil {
+		return fmt.Errorf("replier.SetLogger: %w", err)
+	}
 
-	closeRoute := command.NewRoute("close", independent.onClose)
-	err = replier.AddRoute(closeRoute)
+	err := replier.Route("close", independent.onClose)
 	if err != nil {
-		return fmt.Errorf(`replier.AddRoute("close"): %w`, err)
+		return fmt.Errorf(`replier.Route("close"): %w`, err)
 	}
 
 	independent.manager = replier
-	go func() {
-		if err := independent.manager.Run(); err != nil {
-			independent.Logger.Fatal("service.manager.Run: %w", err)
-		}
-	}()
+	if err := independent.manager.Start(); err != nil {
+		independent.Logger.Fatal("service.manager.Run: %w", err)
+	}
 
 	return nil
 }
 
 // RunManager the services by validating, linting the configurations, as well as setting up the dependencies
-func (independent *Service) RunManager(as config.Type) error {
+func (independent *Service) RunManager() error {
 	if len(independent.Controllers) == 0 {
 		return fmt.Errorf("no Controllers. call service.AddController")
 	}
@@ -315,7 +300,7 @@ func (independent *Service) RunManager(as config.Type) error {
 	// lint extensions, configurations to the controllers
 	//---------------------------------------------------------
 	for name, controllerInterface := range independent.Controllers {
-		c := controllerInterface.(handler.Interface)
+		c := controllerInterface.(base.Interface)
 		var controllerConfig *handlerConfig.Handler
 		var controllerExtensions []string
 
@@ -325,16 +310,24 @@ func (independent *Service) RunManager(as config.Type) error {
 			goto closeContext
 		}
 
-		c.AddConfig(controllerConfig, independent.Config.Url)
-		controllerExtensions = c.RequiredExtensions()
+		c.SetConfig(controllerConfig)
+		if err = c.SetLogger(independent.Logger.Child(name)); err != nil {
+			err = fmt.Errorf("c.SetLogger: %w", err)
+			goto closeContext
+		}
+		controllerExtensions = c.DepIds()
 		for _, extensionUrl := range controllerExtensions {
 			requiredExtension := independent.Config.GetExtension(extensionUrl)
 			req := &clientConfig.Client{
-				Url:  requiredExtension.Url,
-				Id:   requiredExtension.Id,
-				Port: requiredExtension.Port,
+				ServiceUrl: requiredExtension.Url,
+				Id:         requiredExtension.Id,
+				Port:       requiredExtension.Port,
 			}
-			c.AddExtensionConfig(req)
+			err = c.AddDepByService(req)
+			if err != nil {
+				err = fmt.Errorf("c.AddDepByService: %w", err)
+				goto closeContext
+			}
 		}
 	}
 
@@ -385,18 +378,16 @@ func (independent *Service) Run() {
 	}
 
 	for name, controllerInterface := range independent.Controllers {
-		c := controllerInterface.(handler.Interface)
+		c := controllerInterface.(base.Interface)
 		if err = independent.Controllers.Exist(name); err != nil {
 			independent.Logger.Error("service.Controllers.Exist", "config", name, "error", err)
 			break
 		}
 
-		wg.Add(1)
-		go func() {
-			err = c.Run()
-			wg.Done()
-
-		}()
+		err = c.Start()
+		if err != nil {
+			goto errOccurred
+		}
 	}
 
 	err = independent.Context.ServiceReady(independent.Logger)
@@ -487,7 +478,7 @@ func (independent *Service) prepareProxyConfiguration(dep *dev.Dep) error {
 			independent.Logger.Warn("dependency port not matches to the proxy port. Overwriting the source", "port", proxyConfiguration.Instances[0].Port, "dependency port", converted.Instances[0].Port)
 
 			source, _ := depConfig.GetController(service.SourceName)
-			source.Instances[0].Port = proxyConfiguration.Instances[0].Port
+			//source.Instances[0].Port = proxyConfiguration.Instances[0].Port
 
 			depConfig.SetController(source)
 
@@ -529,7 +520,7 @@ func (independent *Service) prepareExtensionConfiguration(dep *dev.Dep) error {
 			independent.Logger.Warn("dependency port not matches to the extension port. Overwriting the source", "port", extensionConfiguration.Port, "dependency port", converted.Port)
 
 			main, _ := depConfig.GetFirstController()
-			main.Instances[0].Port = extensionConfiguration.Port
+			//main.Instances[0].Port = extensionConfiguration.Port
 
 			depConfig.SetController(main)
 

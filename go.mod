@@ -20,8 +20,8 @@ require (
 	github.com/ahmetson/client-lib v0.0.0-20230814161235-c87ba71fcc40
 	github.com/ahmetson/common-lib v0.0.0-20230717140750-5e95e61d69c2
 	github.com/ahmetson/config-lib v0.0.0-20230814154521-44373928ec1b
-	github.com/ahmetson/dev-lib v0.0.0-20230815140608-471eb5cac3a6
-	github.com/ahmetson/handler-lib v0.0.0-20230814162522-8e780da024d7
+	github.com/ahmetson/dev-lib v0.0.0-20230903172959-5955bd911429
+	github.com/ahmetson/handler-lib v0.0.0-20230903111048-af21c6ba4b02
 	github.com/ahmetson/log-lib v0.0.0-20230814152407-68a090e4a798
 	github.com/ahmetson/os-lib v0.0.0-20230814151458-0e1874b6df31
 	github.com/go-git/go-git/v5 v5.8.0
@@ -78,6 +78,7 @@ require (
 )
 
 require (
+	github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2 // indirect
 	github.com/btcsuite/btcd/btcec/v2 v2.2.1 // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.1.0 // indirect
 	github.com/joho/godotenv v1.4.0 // indirect
