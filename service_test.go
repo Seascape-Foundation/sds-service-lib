@@ -204,6 +204,45 @@ func (test *TestServiceSuite) Test_15_handler() {
 	s().NoError(externalClient.Close())
 }
 
+// Test_16_managerRequest tests the start of the manager and closing it by a command
+func (test *TestServiceSuite) Test_16_managerRequest() {
+	s := test.Suite.Require
+
+	test.newService()
+	s().NoError(test.service.prepareConfig())
+
+	s().NoError(test.service.newManager())
+
+	handler := test.service.Handlers["main"].(base.Interface)
+	err := test.service.setHandlerClient(handler)
+	s().NoError(err)
+
+	s().NoError(test.service.startHandler(handler))
+
+	s().NoError(test.service.manager.Start())
+
+	// wait a bit until the handler and manager are initialized
+	time.Sleep(time.Millisecond * 100)
+
+	// test sending a command to the manager
+	externalConfig := test.service.config.Manager
+	externalConfig.UrlFunc(clientConfig.Url)
+	externalClient, err := client.New(externalConfig)
+	s().NoError(err)
+
+	req := message.Request{
+		Command:    "close",
+		Parameters: key_value.Empty(),
+	}
+	reply, err := externalClient.Request(&req)
+	s().NoError(err)
+	s().True(reply.IsOK())
+
+	// clean out
+	s().NoError(handler.Close())
+	s().NoError(test.service.manager.Close())
+}
+
 // In order for 'go test' to run this suite, we need to create
 // a normal test function and pass our suite to suite.Run
 func TestService(t *testing.T) {
