@@ -20,6 +20,7 @@ import (
 	"github.com/ahmetson/os-lib/arg"
 	"github.com/ahmetson/service-lib/config"
 	"github.com/ahmetson/service-lib/manager"
+
 	"slices"
 	"sync"
 )
@@ -32,6 +33,7 @@ type Service struct {
 	RequiredProxies    []string // url => orchestra type
 	RequiredExtensions key_value.KeyValue
 	Logger             *log.Logger
+	Type               serviceConfig.Type
 	id                 string
 	url                string
 	parentId           string
@@ -68,23 +70,19 @@ func New() (*Service, error) {
 		return nil, fmt.Errorf("ctx('%s').Start: %w", contextType, err)
 	}
 
-	configClient := ctx.Config()
 	if len(id) == 0 {
+		configClient := ctx.Config()
 		id, err = configClient.String(config.IdEnv)
 		if err != nil {
 			return nil, fmt.Errorf("configClient.String('%s'): %w", config.IdEnv, err)
 		}
 	}
 	if len(url) == 0 {
+		configClient := ctx.Config()
 		url, err = configClient.String(config.UrlEnv)
 		if err != nil {
 			return nil, fmt.Errorf("configClient.String('%s'): %w", config.UrlEnv, err)
 		}
-	}
-
-	logger, err := log.New(id, true)
-	if err != nil {
-		return nil, fmt.Errorf("log.New(%s): %w", id, err)
 	}
 
 	parentId := ""
@@ -99,10 +97,9 @@ func New() (*Service, error) {
 		return nil, fmt.Errorf("service can not identify it's class. Either use %s flag or %s environment variable", config.UrlFlag, config.UrlEnv)
 	}
 
-	m := manager.New(id, url)
-	err = m.SetLogger(logger)
+	logger, err := log.New(id, true)
 	if err != nil {
-		return nil, fmt.Errorf("manager.SetLogger: %w", err)
+		return nil, fmt.Errorf("log.New(%s): %w", id, err)
 	}
 
 	independent := &Service{
@@ -113,14 +110,21 @@ func New() (*Service, error) {
 		url:             url,
 		id:              id,
 		parentId:        parentId,
+		Type:            serviceConfig.IndependentType,
 	}
 
 	return independent, nil
 }
 
 // SetHandler of category
-func (independent *Service) SetHandler(id string, controller base.Interface) {
-	independent.Handlers.Set(id, controller)
+func (independent *Service) SetHandler(category string, controller base.Interface) {
+	independent.Handlers.Set(category, controller)
+}
+
+// SetTypeByService overwrites the type from the extended service.
+// Maybe proxy or extension will do it.
+func (independent *Service) SetTypeByService(newType serviceConfig.Type) {
+	independent.Type = newType
 }
 
 func (independent *Service) Url() string {
@@ -201,19 +205,8 @@ func (independent *Service) requiredControllerExtensions() []string {
 
 // RunManager the services by validating, linting the configurations, as well as setting up the dependencies
 func (independent *Service) RunManager() error {
-	if len(independent.Handlers) == 0 {
-		return fmt.Errorf("no Handlers. call service.SetHandler")
-	}
 
 	requiredExtensions := independent.requiredControllerExtensions()
-
-	//
-	// prepare the orchestra for dependencies
-	//---------------------------------------------------
-	err := independent.ctx.Start()
-	if err != nil {
-		return fmt.Errorf("orchestra.Run: %w", err)
-	}
 
 	//
 	// prepare proxies configurations
@@ -267,17 +260,19 @@ func (independent *Service) RunManager() error {
 		//}
 	}
 
+	var err error
+
 	//
 	// lint extensions, configurations to the controllers
 	//---------------------------------------------------------
-	for name, controllerInterface := range independent.Handlers {
+	for category, controllerInterface := range independent.Handlers {
 		c := controllerInterface.(base.Interface)
 		var controllerConfig *handlerConfig.Handler
 		var controllerExtensions []string
 
-		controllerConfig, err = independent.config.Handler(name)
+		controllerConfig, err = independent.config.HandlerByCategory(category)
 		if err != nil {
-			err = fmt.Errorf("c '%s' registered in the service, no config found: %w", name, err)
+			err = fmt.Errorf("'%s' registered in the service, no config found: %w", category, err)
 			goto closeContext
 		}
 
@@ -289,7 +284,7 @@ func (independent *Service) RunManager() error {
 		}
 		independent.manager.SetHandlerClients([]manager_client.Interface{hClient})
 
-		if err = c.SetLogger(independent.Logger.Child(name)); err != nil {
+		if err = c.SetLogger(independent.Logger.Child(controllerConfig.Id)); err != nil {
 			err = fmt.Errorf("c.SetLogger: %w", err)
 			goto closeContext
 		}
@@ -340,31 +335,130 @@ closeContext:
 	return err
 }
 
+// prepareConfig of this service. if it doesn't exist, create it.
+func (independent *Service) prepareConfig() error {
+	configClient := independent.ctx.Config()
+
+	// prepare the configuration
+	exist, err := configClient.ServiceExist(independent.id)
+	if err != nil {
+		return fmt.Errorf("configClient.ServiceExist('%s'): %w", independent.id, err)
+	}
+	if !exist {
+		generatedConfig, err := configClient.GenerateService(independent.id, independent.url, independent.Type)
+		if err != nil {
+			return fmt.Errorf("configClient.GenerateService('%s', '%s', '%s'): %w", independent.id, independent.url, independent.Type, err)
+		}
+		independent.config = generatedConfig
+
+		// Get all handlers and add them into the service
+		for category, raw := range independent.Handlers {
+			handler := raw.(base.Interface)
+			generatedHandler, err := configClient.GenerateHandler(handler.Type(), category, false)
+			if err != nil {
+				return fmt.Errorf("configClient.GenerateHandler('%s', '%s', internal: false): %w", handler.Type(), category, err)
+			}
+
+			handler.SetConfig(generatedHandler)
+
+			generatedConfig.SetHandler(generatedHandler)
+		}
+
+		// Some handlers were generated and added into generated service config.
+		// Notify the config engine to update the service.
+		if len(independent.Handlers) > 0 {
+			if err := configClient.SetService(generatedConfig); err != nil {
+				return fmt.Errorf("configClient.SetService('generated'): %w", err)
+			}
+		}
+	} else {
+		returnedService, err := configClient.Service(independent.id)
+		if err != nil {
+			return fmt.Errorf("configClient.Service('%s', '%s', '%s'): %w", independent.id, independent.url, independent.Type, err)
+		}
+
+		if returnedService.Url != independent.url {
+			independent.url = returnedService.Url
+		}
+		if returnedService.Type != independent.Type {
+			independent.Type = returnedService.Type
+		}
+
+		for category, raw := range independent.Handlers {
+			handler := raw.(base.Interface)
+
+			returnedHandler, err := returnedService.HandlerByCategory(category)
+			if err != nil {
+				generatedHandler, err := configClient.GenerateHandler(handler.Type(), category, false)
+				if err != nil {
+					return fmt.Errorf("configClient.GenerateHandler('%s', '%s', internal: false): %w", handler.Type(), category, err)
+				}
+
+				handler.SetConfig(generatedHandler)
+
+				returnedService.SetHandler(generatedHandler)
+				if err := configClient.SetService(returnedService); err != nil {
+					return fmt.Errorf("configClient.SetService('returned'): %w", err)
+				}
+			} else {
+				handler.SetConfig(returnedHandler)
+			}
+		}
+
+		independent.config = returnedService
+	}
+
+	return nil
+}
+
 // Run the service.
 func (independent *Service) Run() error {
 	var wg sync.WaitGroup
 
-	err := independent.RunManager()
-	if err != nil {
-		goto errOccurred
+	if len(independent.Handlers) == 0 {
+		return fmt.Errorf("no Handlers. call service.SetHandler")
 	}
 
-	err = independent.ctx.Start()
+	err := independent.prepareConfig()
 	if err != nil {
-		goto errOccurred
+		return fmt.Errorf("prepareConfig: %w", err)
 	}
 
+	m := manager.New(independent.config.Manager)
+	err = m.SetLogger(independent.Logger)
+	if err != nil {
+		return fmt.Errorf("manager.SetLogger: %w", err)
+	}
 	independent.manager.SetDepClient(independent.ctx.DepManager())
 
-	for id, controllerInterface := range independent.Handlers {
-		c := controllerInterface.(base.Interface)
+	err = independent.RunManager()
+	if err != nil {
+		goto errOccurred
+	}
+
+	for category, raw := range independent.Handlers {
+		c := raw.(base.Interface)
+
+		var handlerClient manager_client.Interface
+		handlerClient, err = manager_client.New(c.Config())
+		if err != nil {
+			err = fmt.Errorf("manager_client.New('%s'): %w", category, err)
+			goto errOccurred
+		}
 
 		err = c.Start()
 		if err != nil {
-			err = fmt.Errorf("handler('%s').Start: %w", id, err)
+			err = fmt.Errorf("handler('%s').Start: %w", category, err)
 			goto errOccurred
 		}
+		independent.manager.SetHandlerClients([]manager_client.Interface{handlerClient})
 	}
+
+	// todo
+	// prepare the proxies by calling them in the context.
+	// prepare the proxies by setting them into the independent.manager.
+	// prepare the extensions by calling them in the context.
+	// prepare the extensions by setting them into the independent.manager.
 
 	err = independent.manager.Start()
 	if err != nil {
