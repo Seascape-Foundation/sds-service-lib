@@ -9,22 +9,20 @@ package service
 
 import (
 	"fmt"
-	"github.com/ahmetson/client-lib"
 	clientConfig "github.com/ahmetson/client-lib/config"
 	"github.com/ahmetson/common-lib/data_type/key_value"
-	"github.com/ahmetson/common-lib/message"
 	"github.com/ahmetson/dev-lib"
 	ctxConfig "github.com/ahmetson/dev-lib/base/config"
 	"github.com/ahmetson/handler-lib/base"
 	handlerConfig "github.com/ahmetson/handler-lib/config"
-	handleManager "github.com/ahmetson/handler-lib/manager_client"
-	syncReplier "github.com/ahmetson/handler-lib/sync_replier"
+	"github.com/ahmetson/handler-lib/manager_client"
 	"github.com/ahmetson/log-lib"
 	"github.com/ahmetson/os-lib/arg"
 	"github.com/ahmetson/service-lib/config"
 	"github.com/ahmetson/service-lib/config/service"
 	"github.com/ahmetson/service-lib/config/service/converter"
 	"github.com/ahmetson/service-lib/config/service/pipeline"
+	"github.com/ahmetson/service-lib/manager"
 	"github.com/ahmetson/service-lib/orchestra/dev"
 	"slices"
 	"strings"
@@ -35,7 +33,6 @@ import (
 type Service struct {
 	Config          *config.Service
 	ctx             context.Interface // context handles the configuration and dependencies
-	handlerClient   handleManager.Interface
 	Controllers     key_value.KeyValue
 	pipelines       []*pipeline.Pipeline // Pipeline beginning: url => [Pipes]
 	RequiredProxies []string             // url => orchestra type
@@ -44,7 +41,7 @@ type Service struct {
 	id              string
 	url             string
 	parentUrl       string
-	manager         base.Interface // manage this service from other parts. it should be called before the orchestra runs
+	manager         *manager.Manager // manage this service from other parts. it should be called before the orchestra runs
 }
 
 // New service with the parameters.
@@ -83,6 +80,12 @@ func New(params ...string) (*Service, error) {
 	parentUrl := ""
 	if arg.FlagExist(config.ParentFlag) {
 		parentUrl = arg.FlagValue(config.ParentFlag)
+	}
+
+	m := manager.New(id, url)
+	err = m.SetLogger(logger)
+	if err != nil {
+		return nil, fmt.Errorf("manager.SetLogger: %w", err)
 	}
 
 	independent := &Service{
@@ -173,61 +176,6 @@ func (independent *Service) preparePipelineConfigurations() error {
 	return nil
 }
 
-// onClose closing all the dependencies in the orchestra.
-func (independent *Service) onClose(request message.Request, logger *log.Logger, _ ...*client.Socket) message.Reply {
-	logger.Info("service received a signal to close",
-		"service", independent.Config.Url,
-		"todo", "close all controllers",
-	)
-
-	for name, controllerInterface := range independent.Controllers {
-		c := controllerInterface.(base.Interface)
-		if c == nil {
-			continue
-		}
-
-		// I expect that the killing process will release its resources as well.
-		err := c.Close()
-		if err != nil {
-			logger.Error("handler.Close", "error", err, "handler", name)
-			request.Fail(fmt.Sprintf(`handler.Close("%s"): %v`, name, err))
-		}
-		logger.Info("handler was closed", "name", name)
-	}
-
-	// remove the orchestra lint
-	independent.Context = nil
-
-	logger.Info("all controllers in the service were closed")
-	return request.Ok(key_value.Empty())
-}
-
-// runManager the orchestra in the background. If it failed to run, then return an error.
-// The url request is the main service to which this orchestra belongs too.
-//
-// The logger is the handler logger as it is. The orchestra will create its own logger from it.
-func (independent *Service) runManager() error {
-	replier := syncReplier.New()
-
-	conf := config.InternalConfiguration(config.ManagerName(independent.Config.Url))
-	replier.SetConfig(conf)
-	if err := replier.SetLogger(independent.Logger.Child("manager")); err != nil {
-		return fmt.Errorf("replier.SetLogger: %w", err)
-	}
-
-	err := replier.Route("close", independent.onClose)
-	if err != nil {
-		return fmt.Errorf(`replier.Route("close"): %w`, err)
-	}
-
-	independent.manager = replier
-	if err := independent.manager.Start(); err != nil {
-		independent.Logger.Fatal("service.manager.Run: %w", err)
-	}
-
-	return nil
-}
-
 // RunManager the services by validating, linting the configurations, as well as setting up the dependencies
 func (independent *Service) RunManager() error {
 	if len(independent.Controllers) == 0 {
@@ -311,6 +259,13 @@ func (independent *Service) RunManager() error {
 		}
 
 		c.SetConfig(controllerConfig)
+		hClient, err := manager_client.New(controllerConfig)
+		if err != nil {
+			err = fmt.Errorf("manager_client.New: %w", err)
+			goto closeContext
+		}
+		independent.manager.SetHandlerClients([]manager_client.Interface{hClient})
+
 		if err = c.SetLogger(independent.Logger.Child(name)); err != nil {
 			err = fmt.Errorf("c.SetLogger: %w", err)
 			goto closeContext
@@ -368,26 +323,30 @@ closeContext:
 }
 
 // Run the service.
-func (independent *Service) Run() {
+func (independent *Service) Run() error {
 	var wg sync.WaitGroup
 
-	err := independent.runManager()
+	err := independent.ctx.Start()
 	if err != nil {
-		err = fmt.Errorf("service.runManager: %w", err)
 		goto errOccurred
 	}
 
-	for name, controllerInterface := range independent.Controllers {
+	independent.manager.SetDepClient(independent.ctx.DepManager())
+
+	for id, controllerInterface := range independent.Controllers {
 		c := controllerInterface.(base.Interface)
-		if err = independent.Controllers.Exist(name); err != nil {
-			independent.Logger.Error("service.Controllers.Exist", "config", name, "error", err)
-			break
-		}
 
 		err = c.Start()
 		if err != nil {
+			err = fmt.Errorf("handler('%s').Start: %w", id, err)
 			goto errOccurred
 		}
+	}
+
+	err = independent.manager.Start()
+	if err != nil {
+		err = fmt.Errorf("service.manager.Start: %w", err)
+		goto errOccurred
 	}
 
 	err = independent.Context.ServiceReady(independent.Logger)
@@ -414,8 +373,9 @@ errOccurred:
 			}
 		}
 
-		independent.Logger.Fatal("one or more controllers removed, exiting from service", "error", err)
+		return err
 	}
+	return nil
 }
 
 // prepareProxy links the proxy with the dependency.
