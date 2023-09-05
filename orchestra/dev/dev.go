@@ -39,7 +39,6 @@ package dev
 import (
 	"fmt"
 	"github.com/ahmetson/common-lib/data_type/key_value"
-	"github.com/ahmetson/handler-lib"
 	"github.com/ahmetson/os-lib/env"
 	"github.com/ahmetson/os-lib/path"
 	"github.com/ahmetson/service-lib/config"
