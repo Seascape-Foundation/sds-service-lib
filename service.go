@@ -517,6 +517,11 @@ func (independent *Service) Run() error {
 			goto errOccurred
 		}
 
+		if err = c.SetLogger(independent.Logger.Child(c.Config().Id)); err != nil {
+			err = fmt.Errorf("handler('%s').SetLogger: %w", c.Config().Id, err)
+			goto errOccurred
+		}
+
 		err = c.Start()
 		if err != nil {
 			err = fmt.Errorf("handler('%s').Start: %w", category, err)
