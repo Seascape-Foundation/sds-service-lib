@@ -41,8 +41,15 @@ type Service struct {
 	// as it should be called before the orchestra runs
 }
 
-// New service with the parameters.
-// Parameter order: id, url, context type
+// New service.
+// Requires url and id.
+// The url and id could be passed as flag config.IdFlag, config.UrlFlag.
+// Or url and id could be passed as environment variable config.IdEnv, config.UrlEnv.
+//
+// It will also create the context internally.
+// The created context is started.
+// By default, the service uses' config.DevContext.
+// It could be overwritten by a flag config.ContextFlag.
 func New() (*Service, error) {
 	id := ""
 	url := ""
@@ -74,14 +81,30 @@ func New() (*Service, error) {
 		configClient := ctx.Config()
 		id, err = configClient.String(config.IdEnv)
 		if err != nil {
-			return nil, fmt.Errorf("configClient.String('%s'): %w", config.IdEnv, err)
+			err = fmt.Errorf("configClient.String('%s'): %w", config.IdEnv, err)
+			if closeErr := ctx.Config().Close(); closeErr != nil {
+				return nil, fmt.Errorf("%v: ctx.Config().Close: %w", err, closeErr)
+			}
+			if closeErr := ctx.DepManager().Close(); closeErr != nil {
+				return nil, fmt.Errorf("%v: ctx.DepManager.Close: %w", err, closeErr)
+
+			}
+			return nil, err
 		}
 	}
 	if len(url) == 0 {
 		configClient := ctx.Config()
 		url, err = configClient.String(config.UrlEnv)
 		if err != nil {
-			return nil, fmt.Errorf("configClient.String('%s'): %w", config.UrlEnv, err)
+			err = fmt.Errorf("configClient.String('%s'): %w", config.UrlEnv, err)
+			if closeErr := ctx.Config().Close(); closeErr != nil {
+				return nil, fmt.Errorf("%v: ctx.Config().Close: %w", err, closeErr)
+			}
+			if closeErr := ctx.DepManager().Close(); closeErr != nil {
+				return nil, fmt.Errorf("%v: ctx.DepManager.Close: %w", err, closeErr)
+
+			}
+			return nil, err
 		}
 	}
 
@@ -91,15 +114,38 @@ func New() (*Service, error) {
 	}
 
 	if len(id) == 0 {
-		return nil, fmt.Errorf("service can not identify itself. Either use %s flag or %s environment variable", config.IdFlag, config.IdEnv)
+		err = fmt.Errorf("service can not identify itself. Either use %s flag or %s environment variable", config.IdFlag, config.IdEnv)
+		if closeErr := ctx.Config().Close(); closeErr != nil {
+			return nil, fmt.Errorf("%v: ctx.Config().Close: %w", err, closeErr)
+		}
+		if closeErr := ctx.DepManager().Close(); closeErr != nil {
+			return nil, fmt.Errorf("%v: ctx.DepManager.Close: %w", err, closeErr)
+		}
+		return nil, err
 	}
 	if len(url) == 0 {
-		return nil, fmt.Errorf("service can not identify it's class. Either use %s flag or %s environment variable", config.UrlFlag, config.UrlEnv)
+		err = fmt.Errorf("service can not identify it's class. Either use %s flag or %s environment variable", config.UrlFlag, config.UrlEnv)
+		if closeErr := ctx.Config().Close(); closeErr != nil {
+			return nil, fmt.Errorf("%v: ctx.Config().Close: %w", err, closeErr)
+		}
+		if closeErr := ctx.DepManager().Close(); closeErr != nil {
+			return nil, fmt.Errorf("%v: ctx.DepManager.Close: %w", err, closeErr)
+		}
+		return nil, err
 	}
 
 	logger, err := log.New(id, true)
 	if err != nil {
-		return nil, fmt.Errorf("log.New(%s): %w", id, err)
+		err = fmt.Errorf("log.New(%s): %w", id, err)
+
+		if closeErr := ctx.Config().Close(); closeErr != nil {
+			return nil, fmt.Errorf("%v: ctx.Config().Close: %w", err, closeErr)
+		}
+		if closeErr := ctx.DepManager().Close(); closeErr != nil {
+			return nil, fmt.Errorf("%v: ctx.DepManager.Close: %w", err, closeErr)
+		}
+
+		return nil, err
 	}
 
 	independent := &Service{
