@@ -562,6 +562,23 @@ func (independent *Service) Run() error {
 	//}
 
 errOccurred:
+	if independent.ctx != nil {
+		configClient := independent.ctx.Config()
+		if configClient != nil {
+			closeErr := configClient.Close()
+			if closeErr != nil {
+				return fmt.Errorf("exit: %w: configClient.Close: %w", err, closeErr)
+			}
+		}
+		depClient := independent.ctx.DepManager()
+		if depClient != nil {
+			closeErr := depClient.Close()
+			if closeErr != nil {
+				return fmt.Errorf("exit: %w: depClient.Close: %w", err, closeErr)
+			}
+		}
+	}
+
 	if err != nil {
 		//if independent.Context != nil {
 		//	independent.Logger.Warn("orchestra wasn't closed, close it")
