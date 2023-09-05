@@ -30,8 +30,12 @@ func New(client *clientConfig.Client) *Manager {
 	handler := syncReplier.New()
 
 	h := &Manager{
-		handler:    handler,
-		serviceUrl: client.ServiceUrl,
+		handler:        handler,
+		serviceUrl:     client.ServiceUrl,
+		logger:         nil,
+		depClient:      nil,
+		handlerClients: make([]manager_client.Interface, 0),
+		deps:           make([]*clientConfig.Client, 0),
 	}
 
 	managerConfig := h.Config(client)

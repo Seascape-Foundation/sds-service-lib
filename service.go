@@ -485,6 +485,8 @@ func (independent *Service) newManager() error {
 	if err != nil {
 		return fmt.Errorf("manager.SetLogger: %w", err)
 	}
+	independent.manager = m
+
 	independent.manager.SetDepClient(independent.ctx.DepManager())
 	return nil
 }
