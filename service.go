@@ -9,8 +9,8 @@ package service
 
 import (
 	"fmt"
-	clientConfig "github.com/ahmetson/client-lib/config"
 	"github.com/ahmetson/common-lib/data_type/key_value"
+	serviceConfig "github.com/ahmetson/config-lib/service"
 	"github.com/ahmetson/dev-lib"
 	ctxConfig "github.com/ahmetson/dev-lib/base/config"
 	"github.com/ahmetson/handler-lib/base"
@@ -19,23 +19,18 @@ import (
 	"github.com/ahmetson/log-lib"
 	"github.com/ahmetson/os-lib/arg"
 	"github.com/ahmetson/service-lib/config"
-	"github.com/ahmetson/service-lib/config/service"
-	"github.com/ahmetson/service-lib/config/service/converter"
-	"github.com/ahmetson/service-lib/config/service/pipeline"
 	"github.com/ahmetson/service-lib/manager"
 	"github.com/ahmetson/service-lib/orchestra/dev"
 	"slices"
-	"strings"
 	"sync"
 )
 
 // Service keeps all necessary parameters of the service.
 type Service struct {
-	Config             *config.Service
+	Config             *serviceConfig.Service
 	ctx                context.Interface // context handles the configuration and dependencies
 	Handlers           key_value.KeyValue
-	pipelines          []*pipeline.Pipeline // Pipeline beginning: url => [Pipes]
-	RequiredProxies    []string             // url => orchestra type
+	RequiredProxies    []string // url => orchestra type
 	RequiredExtensions key_value.KeyValue
 	Logger             *log.Logger
 	Context            *dev.Context
@@ -95,7 +90,6 @@ func New(params ...string) (*Service, error) {
 		Logger:          logger,
 		Handlers:        key_value.Empty(),
 		RequiredProxies: []string{},
-		pipelines:       make([]*pipeline.Pipeline, 0),
 		url:             url,
 		id:              id,
 		parentUrl:       parentUrl,
@@ -137,20 +131,20 @@ func (independent *Service) IsProxyRequired(proxyUrl string) bool {
 }
 
 // A Pipeline creates a chain of the proxies.
-func (independent *Service) Pipeline(pipeEnd *pipeline.PipeEnd, proxyUrls ...string) error {
-	pipelines := independent.pipelines
-	controllers := independent.Handlers
-	proxies := independent.RequiredProxies
-	createdPipeline := pipeEnd.Pipeline(proxyUrls)
-
-	if err := pipeline.PrepareAddingPipeline(pipelines, proxies, controllers, createdPipeline); err != nil {
-		return fmt.Errorf("pipeline.PrepareAddingPipeline: %w", err)
-	}
-
-	independent.pipelines = append(independent.pipelines, createdPipeline)
-
-	return nil
-}
+//func (independent *Service) Pipeline(pipeEnd *pipeline.PipeEnd, proxyUrls ...string) error {
+//	pipelines := independent.pipelines
+//	controllers := independent.Handlers
+//	proxies := independent.RequiredProxies
+//	createdPipeline := pipeEnd.Pipeline(proxyUrls)
+//
+//	if err := pipeline.PrepareAddingPipeline(pipelines, proxies, controllers, createdPipeline); err != nil {
+//		return fmt.Errorf("pipeline.PrepareAddingPipeline: %w", err)
+//	}
+//
+//	independent.pipelines = append(independent.pipelines, createdPipeline)
+//
+//	return nil
+//}
 
 // returns the extension urls
 func (independent *Service) requiredControllerExtensions() []string {
@@ -165,25 +159,25 @@ func (independent *Service) requiredControllerExtensions() []string {
 
 // lintPipelineConfiguration checks that proxy url and controllerName are valid.
 // Then, in the Config, it makes sure that dependency is linted.
-func (independent *Service) preparePipelineConfigurations() error {
-	servicePipeline := pipeline.FindServiceEnd(independent.pipelines)
-
-	if servicePipeline != nil {
-		servicePipeline.End.Url = independent.Config.Url
-		independent.Logger.Info("dont forget to update the yaml with the controllerPipeline service end url")
-		err := pipeline.LintToService(independent.Context, independent.Config, servicePipeline)
-		if err != nil {
-			return fmt.Errorf("pipeline.LintToService: %w", err)
-		}
-	}
-
-	err := pipeline.LintToControllers(independent.Context, independent.Config, independent.pipelines)
-	if err != nil {
-		return fmt.Errorf("pipeline.LintToControllers: %w", err)
-	}
-
-	return nil
-}
+//func (independent *Service) preparePipelineConfigurations() error {
+//	servicePipeline := pipeline.FindServiceEnd(independent.pipelines)
+//
+//	if servicePipeline != nil {
+//		servicePipeline.End.Url = independent.Config.Url
+//		independent.Logger.Info("dont forget to update the yaml with the controllerPipeline service end url")
+//		err := pipeline.LintToService(independent.Context, independent.Config, servicePipeline)
+//		if err != nil {
+//			return fmt.Errorf("pipeline.LintToService: %w", err)
+//		}
+//	}
+//
+//	err := pipeline.LintToControllers(independent.Context, independent.Config, independent.pipelines)
+//	if err != nil {
+//		return fmt.Errorf("pipeline.LintToControllers: %w", err)
+//	}
+//
+//	return nil
+//}
 
 // RunManager the services by validating, linting the configurations, as well as setting up the dependencies
 func (independent *Service) RunManager() error {
@@ -221,15 +215,15 @@ func (independent *Service) RunManager() error {
 			}
 		}
 
-		if len(independent.pipelines) == 0 {
-			err = fmt.Errorf("no pipepline to lint the proxy to the handler")
-			goto closeContext
-		}
+		//if len(independent.pipelines) == 0 {
+		//	err = fmt.Errorf("no pipeline to lint the proxy to the handler")
+		//	goto closeContext
+		//}
 
-		if err = independent.preparePipelineConfigurations(); err != nil {
-			err = fmt.Errorf("preparePipelineConfigurations: %w", err)
-			goto closeContext
-		}
+		//if err = independent.preparePipelineConfigurations(); err != nil {
+		//	err = fmt.Errorf("preparePipelineConfigurations: %w", err)
+		//	goto closeContext
+		//}
 	}
 
 	//
@@ -261,7 +255,7 @@ func (independent *Service) RunManager() error {
 		var controllerConfig *handlerConfig.Handler
 		var controllerExtensions []string
 
-		controllerConfig, err = independent.Config.GetController(name)
+		controllerConfig, err = independent.Config.Handler(name)
 		if err != nil {
 			err = fmt.Errorf("c '%s' registered in the service, no config found: %w", name, err)
 			goto closeContext
@@ -281,13 +275,8 @@ func (independent *Service) RunManager() error {
 		}
 		controllerExtensions = c.DepIds()
 		for _, extensionUrl := range controllerExtensions {
-			requiredExtension := independent.Config.GetExtension(extensionUrl)
-			req := &clientConfig.Client{
-				ServiceUrl: requiredExtension.Url,
-				Id:         requiredExtension.Id,
-				Port:       requiredExtension.Port,
-			}
-			err = c.AddDepByService(req)
+			requiredExtension := independent.Config.ExtensionByUrl(extensionUrl)
+			err = c.AddDepByService(requiredExtension)
 			if err != nil {
 				err = fmt.Errorf("c.AddDepByService: %w", err)
 				goto closeContext
@@ -396,13 +385,15 @@ errOccurred:
 //
 // if dependency doesn't exist, it will be downloaded
 func (independent *Service) prepareProxy(dep *dev.Dep) error {
-	proxyConfiguration := independent.Config.GetProxy(dep.Url())
+	// todo find the proxy url by it's id in the services list.
+	// the config.Proxy() accepts id not a url.
+	proxyConfiguration := independent.Config.Proxy(dep.Url())
 
-	independent.Logger.Info("prepare proxy", "url", proxyConfiguration.Url, "port", proxyConfiguration.Instances[0].Port)
-	err := dep.Run(proxyConfiguration.Instances[0].Port, independent.Logger)
-	if err != nil {
-		return fmt.Errorf(`dep.Run("%s"): %w`, dep.Url(), err)
-	}
+	independent.Logger.Info("prepare proxy", "id", proxyConfiguration.Id)
+	//err := dep.Run(proxyConfiguration.Instances[0].Port, independent.Logger)
+	//if err != nil {
+	//	return fmt.Errorf(`dep.Run("%s"): %w`, dep.Url(), err)
+	//}
 
 	return nil
 }
@@ -411,7 +402,7 @@ func (independent *Service) prepareProxy(dep *dev.Dep) error {
 //
 // if dependency doesn't exist, it will be downloaded
 func (independent *Service) prepareExtension(dep *dev.Dep) error {
-	extensionConfiguration := independent.Config.GetExtension(dep.Url())
+	extensionConfiguration := independent.Config.ExtensionByUrl(dep.Url())
 
 	independent.Logger.Info("prepare extension", "url", extensionConfiguration.Url, "port", extensionConfiguration.Port)
 	err := dep.Run(extensionConfiguration.Port, independent.Logger)
@@ -435,33 +426,33 @@ func (independent *Service) prepareProxyConfiguration(dep *dev.Dep) error {
 		return fmt.Errorf("dev.PrepareConfig(%s): %w", dep.Url(), err)
 	}
 
-	depConfig, err := dep.GetServiceConfig()
-	converted, err := converter.ServiceToProxy(depConfig)
-	if err != nil {
-		return fmt.Errorf("config.ServiceToProxy: %w", err)
-	}
+	//depConfig, err := dep.GetServiceConfig()
+	//converted, err := converter.ServiceToProxy(depConfig)
+	//if err != nil {
+	//	return fmt.Errorf("config.ServiceToProxy: %w", err)
+	//}
 
-	proxyConfiguration := independent.Config.GetProxy(dep.Url())
-	if proxyConfiguration == nil {
-		independent.Config.SetProxy(&converted)
-	} else {
-		if strings.Compare(proxyConfiguration.Url, converted.Url) != 0 {
-			return fmt.Errorf("the proxy urls are not matching. in your config: %s, in the deps: %s", proxyConfiguration.Url, converted.Url)
-		}
-		if proxyConfiguration.Instances[0].Port != converted.Instances[0].Port {
-			independent.Logger.Warn("dependency port not matches to the proxy port. Overwriting the source", "port", proxyConfiguration.Instances[0].Port, "dependency port", converted.Instances[0].Port)
-
-			source, _ := depConfig.GetController(service.SourceName)
-			//source.Instances[0].Port = proxyConfiguration.Instances[0].Port
-
-			depConfig.SetController(source)
-
-			err = dep.SetServiceConfig(depConfig)
-			if err != nil {
-				return fmt.Errorf("failed to update source port in dependency porxy: '%s': %w", dep.Url(), err)
-			}
-		}
-	}
+	//proxyConfiguration := independent.Config.GetProxy(dep.Url())
+	//if proxyConfiguration == nil {
+	//	independent.Config.SetProxy(&converted)
+	//} else {
+	//	if strings.Compare(proxyConfiguration.Url, converted.Url) != 0 {
+	//		return fmt.Errorf("the proxy urls are not matching. in your config: %s, in the deps: %s", proxyConfiguration.Url, converted.Url)
+	//	}
+	//	if proxyConfiguration.Instances[0].Port != converted.Instances[0].Port {
+	//		independent.Logger.Warn("dependency port not matches to the proxy port. Overwriting the source", "port", proxyConfiguration.Instances[0].Port, "dependency port", converted.Instances[0].Port)
+	//
+	//		source, _ := depConfig.GetController(service.SourceName)
+	//		source.Instances[0].Port = proxyConfiguration.Instances[0].Port
+	//
+	//depConfig.SetController(source)
+	//
+	//err = dep.SetServiceConfig(depConfig)
+	//if err != nil {
+	//	return fmt.Errorf("failed to update source port in dependency proxy: '%s': %w", dep.Url(), err)
+	//}
+	//}
+	//}
 
 	return nil
 }
@@ -477,33 +468,33 @@ func (independent *Service) prepareExtensionConfiguration(dep *dev.Dep) error {
 		return fmt.Errorf("dev.PrepareConfig on %s: %w", dep.Url(), err)
 	}
 
-	depConfig, err := dep.GetServiceConfig()
-	converted, err := converter.ServiceToExtension(depConfig)
-	if err != nil {
-		return fmt.Errorf("config.ServiceToExtension: %w", err)
-	}
-
-	extensionConfiguration := independent.Config.GetExtension(dep.Url())
-	if extensionConfiguration == nil {
-		independent.Config.SetExtension(&converted)
-	} else {
-		if strings.Compare(extensionConfiguration.Url, converted.Url) != 0 {
-			return fmt.Errorf("the extension url in your '%s' config not matches to '%s' in the dependency", extensionConfiguration.Url, converted.Url)
-		}
-		if extensionConfiguration.Port != converted.Port {
-			independent.Logger.Warn("dependency port not matches to the extension port. Overwriting the source", "port", extensionConfiguration.Port, "dependency port", converted.Port)
-
-			main, _ := depConfig.GetFirstController()
-			//main.Instances[0].Port = extensionConfiguration.Port
-
-			depConfig.SetController(main)
-
-			err = dep.SetServiceConfig(depConfig)
-			if err != nil {
-				return fmt.Errorf("failed to update port in dependency extension: '%s': %w", dep.Url(), err)
-			}
-		}
-	}
+	//depConfig, err := dep.GetServiceConfig()
+	//converted, err := converter.ServiceToExtension(depConfig)
+	//if err != nil {
+	//	return fmt.Errorf("config.ServiceToExtension: %w", err)
+	//}
+	//
+	//extensionConfiguration := independent.Config.GetExtension(dep.Url())
+	//if extensionConfiguration == nil {
+	//	independent.Config.SetExtension(&converted)
+	//} else {
+	//	if strings.Compare(extensionConfiguration.Url, converted.Url) != 0 {
+	//		return fmt.Errorf("the extension url in your '%s' config not matches to '%s' in the dependency", extensionConfiguration.Url, converted.Url)
+	//	}
+	//	if extensionConfiguration.Port != converted.Port {
+	//		independent.Logger.Warn("dependency port not matches to the extension port. Overwriting the source", "port", extensionConfiguration.Port, "dependency port", converted.Port)
+	//
+	//		main, _ := depConfig.GetFirstController()
+	//		main.Instances[0].Port = extensionConfiguration.Port
+	//
+	//depConfig.SetController(main)
+	//
+	//err = dep.SetServiceConfig(depConfig)
+	//if err != nil {
+	//	return fmt.Errorf("failed to update port in dependency extension: '%s': %w", dep.Url(), err)
+	//}
+	//}
+	//}
 
 	return nil
 }
