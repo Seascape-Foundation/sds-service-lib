@@ -31,17 +31,19 @@ import (
 
 // Service keeps all necessary parameters of the service.
 type Service struct {
-	Config          *config.Service
-	ctx             context.Interface // context handles the configuration and dependencies
-	Controllers     key_value.KeyValue
-	pipelines       []*pipeline.Pipeline // Pipeline beginning: url => [Pipes]
-	RequiredProxies []string             // url => orchestra type
-	Logger          *log.Logger
-	Context         *dev.Context
-	id              string
-	url             string
-	parentUrl       string
-	manager         *manager.Manager // manage this service from other parts. it should be called before the orchestra runs
+	Config             *config.Service
+	ctx                context.Interface // context handles the configuration and dependencies
+	Controllers        key_value.KeyValue
+	pipelines          []*pipeline.Pipeline // Pipeline beginning: url => [Pipes]
+	RequiredProxies    []string             // url => orchestra type
+	RequiredExtensions key_value.KeyValue
+	Logger             *log.Logger
+	Context            *dev.Context
+	id                 string
+	url                string
+	parentUrl          string
+	manager            *manager.Manager // manage this service from other parts
+	// as it should be called before the orchestra runs
 }
 
 // New service with the parameters.
@@ -120,6 +122,13 @@ func (independent *Service) Id() string {
 func (independent *Service) RequireProxy(url string) {
 	if !independent.IsProxyRequired(url) {
 		independent.RequiredProxies = append(independent.RequiredProxies, url)
+	}
+}
+
+// RequireExtension lints the id to the extension url
+func (independent *Service) RequireExtension(id string, url string) {
+	if err := independent.RequiredExtensions.Exist(id); err == nil {
+		independent.RequiredExtensions.Set(id, url)
 	}
 }
 
@@ -326,7 +335,12 @@ closeContext:
 func (independent *Service) Run() error {
 	var wg sync.WaitGroup
 
-	err := independent.ctx.Start()
+	err := independent.RunManager()
+	if err != nil {
+		goto errOccurred
+	}
+
+	err = independent.ctx.Start()
 	if err != nil {
 		goto errOccurred
 	}

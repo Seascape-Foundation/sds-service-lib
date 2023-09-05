@@ -81,11 +81,15 @@ func main() {
 	app, _ := service.New("app", "github.com/ahmetson/app", config.DevContext)
 
 	server := replier.New()
-	ext := "github.com/ahmetson/mysql-extension"
-	server.Route("hello-name", onHelloName, ext)
+	
+	serviceUrl := "github.com/ahmetson/mysql-extension"
+	db := "database"
+	
+	server.Route("hello-name", onHelloName, extId)
 	
 	app.AddController("main", server)
 	app.RequireProxy("github.com/ahmetson/http-proxy")
+	app.RequireExt(db, serviceUrl)
 	app.Run()
 }
 
