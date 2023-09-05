@@ -41,30 +41,10 @@ type Service struct {
 
 // New service with the parameters.
 // Parameter order: id, url, context type
-func New(params ...string) (*Service, error) {
+func New() (*Service, error) {
 	id := ""
-	if len(params) > 0 {
-		id = params[0]
-	}
 	url := ""
-	if len(params) > 1 {
-		url = params[1]
-	}
-	contextType := ctxConfig.DevContext
-
-	if len(params) > 2 {
-		contextType = params[2]
-	}
-
-	logger, err := log.New(id, true)
-	if err != nil {
-		return nil, fmt.Errorf("log.New(%s): %w", id, err)
-	}
-
-	ctx, err := context.New(contextType)
-	if err != nil {
-		return nil, fmt.Errorf("context.New(%s): %w", ctxConfig.DevContext, err)
-	}
+	contextType := ctxConfig.DevContext // default is used a dev context
 
 	// let's validate the parameters of the service
 	if arg.FlagExist(config.IdFlag) {
@@ -73,10 +53,50 @@ func New(params ...string) (*Service, error) {
 	if arg.FlagExist(config.UrlFlag) {
 		url = arg.FlagValue(config.UrlFlag)
 	}
+	if arg.FlagExist(config.ContextFlag) {
+		contextType = arg.FlagValue(config.ConfigFlag)
+	}
+
+	// Start the context
+	ctx, err := context.New(contextType)
+	if err != nil {
+		return nil, fmt.Errorf("context.New(%s): %w", ctxConfig.DevContext, err)
+	}
+
+	err = ctx.Start()
+	if err != nil {
+		return nil, fmt.Errorf("ctx('%s').Start: %w", contextType, err)
+	}
+
+	configClient := ctx.Config()
+	if len(id) == 0 {
+		id, err = configClient.String(config.IdEnv)
+		if err != nil {
+			return nil, fmt.Errorf("configClient.String('%s'): %w", config.IdEnv, err)
+		}
+	}
+	if len(url) == 0 {
+		url, err = configClient.String(config.UrlEnv)
+		if err != nil {
+			return nil, fmt.Errorf("configClient.String('%s'): %w", config.UrlEnv, err)
+		}
+	}
+
+	logger, err := log.New(id, true)
+	if err != nil {
+		return nil, fmt.Errorf("log.New(%s): %w", id, err)
+	}
 
 	parentId := ""
 	if arg.FlagExist(config.ParentFlag) {
 		parentId = arg.FlagValue(config.ParentFlag)
+	}
+
+	if len(id) == 0 {
+		return nil, fmt.Errorf("service can not identify itself. Either use %s flag or %s environment variable", config.IdFlag, config.IdEnv)
+	}
+	if len(url) == 0 {
+		return nil, fmt.Errorf("service can not identify it's class. Either use %s flag or %s environment variable", config.UrlFlag, config.UrlEnv)
 	}
 
 	m := manager.New(id, url)
