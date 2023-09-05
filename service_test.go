@@ -2,9 +2,12 @@ package service
 
 import (
 	"fmt"
+	"github.com/ahmetson/client-lib"
+	clientConfig "github.com/ahmetson/client-lib/config"
 	"github.com/ahmetson/common-lib/data_type/key_value"
 	"github.com/ahmetson/common-lib/message"
 	"github.com/ahmetson/handler-lib/base"
+	handlerConfig "github.com/ahmetson/handler-lib/config"
 	"github.com/ahmetson/handler-lib/sync_replier"
 	"github.com/ahmetson/os-lib/arg"
 	"github.com/ahmetson/os-lib/path"
@@ -13,6 +16,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 // Define the suite, and absorb the built-in basic suite
@@ -161,6 +165,43 @@ func (test *TestServiceSuite) Test_14_manager() {
 	handler := test.service.Handlers["main"].(base.Interface)
 	err := test.service.setHandlerClient(handler)
 	s().NoError(err)
+}
+
+// Test_15_handler tests setup and start of the handler
+func (test *TestServiceSuite) Test_15_handler() {
+	s := test.Suite.Require
+
+	test.newService()
+	s().NoError(test.service.prepareConfig())
+
+	s().NoError(test.service.newManager())
+
+	handler := test.service.Handlers["main"].(base.Interface)
+	s().NoError(test.service.startHandler(handler))
+
+	// wait a bit until the handler is initialized
+	time.Sleep(time.Millisecond * 100)
+
+	// let's test that handler runs
+	hConfig := handler.Config()
+	targetZmqType := handlerConfig.SocketType(hConfig.Type)
+	externalConfig := clientConfig.New(test.service.url, hConfig.Id, hConfig.Port, targetZmqType)
+	externalConfig.UrlFunc(clientConfig.Url)
+	externalClient, err := client.New(externalConfig)
+	s().NoError(err)
+
+	// request the handler
+	req := message.Request{
+		Command:    "hello",
+		Parameters: key_value.Empty(),
+	}
+	reply, err := externalClient.Request(&req)
+	s().NoError(err)
+	s().True(reply.IsOK())
+
+	// close the handler
+	s().NoError(handler.Close())
+	s().NoError(externalClient.Close())
 }
 
 // In order for 'go test' to run this suite, we need to create
