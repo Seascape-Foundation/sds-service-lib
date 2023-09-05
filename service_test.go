@@ -121,6 +121,34 @@ func (test *TestServiceSuite) Test_10_New() {
 	os.Args = os.Args[:len(os.Args)-1]
 }
 
+// Test_11_generateConfig creates a configuration and sets it in the service
+func (test *TestServiceSuite) Test_11_generateConfig() {
+	s := test.Suite.Require
+
+	test.newService()
+
+	s().NoError(test.service.generateConfig())
+}
+
+// Test_12_lintConfig loads the configuration of the service and sets it
+func (test *TestServiceSuite) Test_12_lintConfig() {
+	s := test.Suite.Require
+
+	test.newService()
+
+	s().NoError(test.service.lintConfig())
+}
+
+// Test_13_prepareConfig is calling lint config since the configuration exists in the context.
+func (test *TestServiceSuite) Test_13_prepareConfig() {
+	s := test.Suite.Require
+
+	test.newService()
+
+	// It should call the test.service.lintConfig
+	s().NoError(test.service.prepareConfig())
+}
+
 // In order for 'go test' to run this suite, we need to create
 // a normal test function and pass our suite to suite.Run
 func TestService(t *testing.T) {
