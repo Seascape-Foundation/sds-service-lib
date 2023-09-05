@@ -483,6 +483,16 @@ func (independent *Service) prepareConfig() error {
 	return nil
 }
 
+func (independent *Service) newManager() error {
+	m := manager.New(independent.config.Manager)
+	err := m.SetLogger(independent.Logger)
+	if err != nil {
+		return fmt.Errorf("manager.SetLogger: %w", err)
+	}
+	independent.manager.SetDepClient(independent.ctx.DepManager())
+	return nil
+}
+
 // Run the service.
 func (independent *Service) Run() error {
 	var wg sync.WaitGroup
@@ -495,17 +505,15 @@ func (independent *Service) Run() error {
 		return fmt.Errorf("prepareConfig: %w", err)
 	}
 
-	m := manager.New(independent.config.Manager)
-	err := m.SetLogger(independent.Logger)
-	if err != nil {
-		return fmt.Errorf("manager.SetLogger: %w", err)
+	if err := independent.newManager(); err != nil {
+		return fmt.Errorf("newManager: %w", err)
 	}
-	independent.manager.SetDepClient(independent.ctx.DepManager())
+	//err = independent.RunManager()
+	//if err != nil {
+	//	goto errOccurred
+	//}
 
-	err = independent.RunManager()
-	if err != nil {
-		goto errOccurred
-	}
+	var err error
 
 	for category, raw := range independent.Handlers {
 		c := raw.(base.Interface)
