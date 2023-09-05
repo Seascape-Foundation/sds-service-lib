@@ -322,14 +322,6 @@ func (independent *Service) RunManager() error {
 			goto closeContext
 		}
 
-		c.SetConfig(controllerConfig)
-		hClient, err := manager_client.New(controllerConfig)
-		if err != nil {
-			err = fmt.Errorf("manager_client.New: %w", err)
-			goto closeContext
-		}
-		independent.manager.SetHandlerClients([]manager_client.Interface{hClient})
-
 		if err = c.SetLogger(independent.Logger.Child(controllerConfig.Id)); err != nil {
 			err = fmt.Errorf("c.SetLogger: %w", err)
 			goto closeContext
