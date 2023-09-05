@@ -508,10 +508,6 @@ func (independent *Service) Run() error {
 	if err := independent.newManager(); err != nil {
 		return fmt.Errorf("newManager: %w", err)
 	}
-	//err = independent.RunManager()
-	//if err != nil {
-	//	goto errOccurred
-	//}
 
 	var err error
 
