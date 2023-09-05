@@ -149,6 +149,20 @@ func (test *TestServiceSuite) Test_13_prepareConfig() {
 	s().NoError(test.service.prepareConfig())
 }
 
+// Test_14_manager tests the creation of the manager and linting it with the handler.
+func (test *TestServiceSuite) Test_14_manager() {
+	s := test.Suite.Require
+
+	test.newService()
+	s().NoError(test.service.prepareConfig())
+
+	s().NoError(test.service.newManager())
+
+	handler := test.service.Handlers["main"].(base.Interface)
+	err := test.service.setHandlerClient(handler)
+	s().NoError(err)
+}
+
 // In order for 'go test' to run this suite, we need to create
 // a normal test function and pass our suite to suite.Run
 func TestService(t *testing.T) {

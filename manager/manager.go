@@ -30,7 +30,7 @@ func New(client *clientConfig.Client) *Manager {
 	handler := syncReplier.New()
 
 	h := &Manager{
-		handler:    syncReplier.New(),
+		handler:    handler,
 		serviceUrl: client.ServiceUrl,
 	}
 
