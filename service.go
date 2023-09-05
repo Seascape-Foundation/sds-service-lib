@@ -22,7 +22,6 @@ import (
 	"github.com/ahmetson/service-lib/manager"
 
 	"slices"
-	"sync"
 )
 
 // Service keeps all necessary parameters of the service.
@@ -518,8 +517,6 @@ func (independent *Service) startHandler(handler base.Interface) error {
 
 // Run the service.
 func (independent *Service) Run() error {
-	var wg sync.WaitGroup
-
 	if len(independent.Handlers) == 0 {
 		return fmt.Errorf("no Handlers. call service.SetHandler")
 	}
@@ -563,8 +560,6 @@ func (independent *Service) Run() error {
 	//if err != nil {
 	//	goto errOccurred
 	//}
-
-	wg.Wait()
 
 errOccurred:
 	if err != nil {
