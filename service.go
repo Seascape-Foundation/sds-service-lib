@@ -33,7 +33,7 @@ import (
 type Service struct {
 	Config             *config.Service
 	ctx                context.Interface // context handles the configuration and dependencies
-	Controllers        key_value.KeyValue
+	Handlers           key_value.KeyValue
 	pipelines          []*pipeline.Pipeline // Pipeline beginning: url => [Pipes]
 	RequiredProxies    []string             // url => orchestra type
 	RequiredExtensions key_value.KeyValue
@@ -93,7 +93,7 @@ func New(params ...string) (*Service, error) {
 	independent := &Service{
 		ctx:             ctx,
 		Logger:          logger,
-		Controllers:     key_value.Empty(),
+		Handlers:        key_value.Empty(),
 		RequiredProxies: []string{},
 		pipelines:       make([]*pipeline.Pipeline, 0),
 		url:             url,
@@ -104,9 +104,9 @@ func New(params ...string) (*Service, error) {
 	return independent, nil
 }
 
-// AddController of category
-func (independent *Service) AddController(category string, controller base.Interface) {
-	independent.Controllers.Set(category, controller)
+// SetHandler of category
+func (independent *Service) SetHandler(id string, controller base.Interface) {
+	independent.Handlers.Set(id, controller)
 }
 
 func (independent *Service) Url() string {
@@ -139,7 +139,7 @@ func (independent *Service) IsProxyRequired(proxyUrl string) bool {
 // A Pipeline creates a chain of the proxies.
 func (independent *Service) Pipeline(pipeEnd *pipeline.PipeEnd, proxyUrls ...string) error {
 	pipelines := independent.pipelines
-	controllers := independent.Controllers
+	controllers := independent.Handlers
 	proxies := independent.RequiredProxies
 	createdPipeline := pipeEnd.Pipeline(proxyUrls)
 
@@ -155,7 +155,7 @@ func (independent *Service) Pipeline(pipeEnd *pipeline.PipeEnd, proxyUrls ...str
 // returns the extension urls
 func (independent *Service) requiredControllerExtensions() []string {
 	var extensions []string
-	for _, controllerInterface := range independent.Controllers {
+	for _, controllerInterface := range independent.Handlers {
 		c := controllerInterface.(base.Interface)
 		extensions = append(extensions, c.DepIds()...)
 	}
@@ -187,8 +187,8 @@ func (independent *Service) preparePipelineConfigurations() error {
 
 // RunManager the services by validating, linting the configurations, as well as setting up the dependencies
 func (independent *Service) RunManager() error {
-	if len(independent.Controllers) == 0 {
-		return fmt.Errorf("no Controllers. call service.AddController")
+	if len(independent.Handlers) == 0 {
+		return fmt.Errorf("no Handlers. call service.SetHandler")
 	}
 
 	requiredExtensions := independent.requiredControllerExtensions()
@@ -256,7 +256,7 @@ func (independent *Service) RunManager() error {
 	//
 	// lint extensions, configurations to the controllers
 	//---------------------------------------------------------
-	for name, controllerInterface := range independent.Controllers {
+	for name, controllerInterface := range independent.Handlers {
 		c := controllerInterface.(base.Interface)
 		var controllerConfig *handlerConfig.Handler
 		var controllerExtensions []string
@@ -347,7 +347,7 @@ func (independent *Service) Run() error {
 
 	independent.manager.SetDepClient(independent.ctx.DepManager())
 
-	for id, controllerInterface := range independent.Controllers {
+	for id, controllerInterface := range independent.Handlers {
 		c := controllerInterface.(base.Interface)
 
 		err = c.Start()
