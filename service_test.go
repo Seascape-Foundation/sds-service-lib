@@ -106,6 +106,34 @@ func (test *TestServiceSuite) newService() {
 	test.service.SetHandler("main", test.handler)
 }
 
+func (test *TestServiceSuite) mainHandler() base.Interface {
+	return test.service.Handlers["main"].(base.Interface)
+}
+
+func (test *TestServiceSuite) externalClient(hConfig *handlerConfig.Handler) *client.Socket {
+	s := test.Suite.Require
+
+	// let's test that handler runs
+	targetZmqType := handlerConfig.SocketType(hConfig.Type)
+	externalConfig := clientConfig.New(test.service.url, hConfig.Id, hConfig.Port, targetZmqType)
+	externalConfig.UrlFunc(clientConfig.Url)
+	externalClient, err := client.New(externalConfig)
+	s().NoError(err)
+
+	return externalClient
+}
+
+func (test *TestServiceSuite) managerClient() *client.Socket {
+	s := test.Suite.Require
+
+	externalConfig := test.service.config.Manager
+	externalConfig.UrlFunc(clientConfig.Url)
+	externalClient, err := client.New(externalConfig)
+	s().NoError(err)
+
+	return externalClient
+}
+
 // Test_10_New new service by flag or environment variable
 func (test *TestServiceSuite) Test_10_New() {
 	s := test.Suite.Require
@@ -126,10 +154,12 @@ func (test *TestServiceSuite) Test_10_New() {
 	// Clean out the os args
 	win.Args = win.Args[:len(win.Args)-2]
 
+	test.logger.Info("close the already running context....")
+
 	// remove the created, and try from environment variable
 	s().NoError(test.ctx.Close())
 	// wait a bit for closing context threads
-	time.Sleep(time.Millisecond * 100)
+	time.Sleep(time.Millisecond * 500)
 
 	// try to load from the environment variable parameters
 	win.Args = append(win.Args, test.envPath)
@@ -137,7 +167,7 @@ func (test *TestServiceSuite) Test_10_New() {
 	ctx, err := context.New()
 	s().NoError(err)
 	test.ctx = ctx
-	s().NoError(test.ctx.Start())
+	s().NoError(test.ctx.Start(), "context start failed")
 
 	// Wait a bit for context initialization
 	time.Sleep(time.Millisecond * 100)
@@ -210,19 +240,14 @@ func (test *TestServiceSuite) Test_15_handler() {
 
 	s().NoError(test.service.newManager())
 
-	handler := test.service.Handlers["main"].(base.Interface)
+	handler := test.mainHandler()
 	s().NoError(test.service.startHandler(handler))
 
 	// wait a bit until the handler is initialized
 	time.Sleep(time.Millisecond * 100)
 
 	// let's test that handler runs
-	hConfig := handler.Config()
-	targetZmqType := handlerConfig.SocketType(hConfig.Type)
-	externalConfig := clientConfig.New(test.service.url, hConfig.Id, hConfig.Port, targetZmqType)
-	externalConfig.UrlFunc(clientConfig.Url)
-	externalClient, err := client.New(externalConfig)
-	s().NoError(err)
+	externalClient := test.externalClient(handler.Config())
 
 	// request the handler
 	req := message.Request{
@@ -277,11 +302,46 @@ func (test *TestServiceSuite) Test_16_managerRequest() {
 	s().NoError(test.service.manager.Close())
 }
 
-//// Test_17_run
-//// todo fix the independent run as it will return immediately.
-//func (test *TestServiceSuite) Test_17_run() {
-//
-//}
+// Test_17_Start test service start.
+// It's the collection of all previous tested functions together
+// The started service will make the handler and managers available
+func (test *TestServiceSuite) Test_17_Start() {
+	s := test.Require
+
+	test.newService()
+
+	s().NoError(test.service.Start())
+
+	// wait a bit for thread initialization
+	time.Sleep(time.Millisecond * 100)
+
+	// let's test that handler runs
+	mainHandler := test.mainHandler()
+	externalClient := test.externalClient(mainHandler.Config())
+
+	// Make sure that handlers are running
+	req := message.Request{
+		Command:    "hello",
+		Parameters: key_value.Empty(),
+	}
+	reply, err := externalClient.Request(&req)
+	s().NoError(err)
+	s().True(reply.IsOK())
+
+	// Make sure that manager is running
+	managerClient := test.managerClient()
+	req = message.Request{
+		Command:    "heartbeat",
+		Parameters: key_value.Empty(),
+	}
+	reply, err = managerClient.Request(&req)
+	s().NoError(err)
+	s().True(reply.IsOK())
+
+	// clean out
+	s().NoError(mainHandler.Close())
+	s().NoError(test.service.manager.Close())
+}
 
 // In order for 'go test' to run this suite, we need to create
 // a normal test function and pass our suite to suite.Run
