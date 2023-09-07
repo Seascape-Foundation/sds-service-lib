@@ -518,6 +518,8 @@ func (independent *Service) startHandler(handler base.Interface) error {
 }
 
 // Start the service.
+//
+// Requires at least one handler.
 func (independent *Service) Start() error {
 	if len(independent.Handlers) == 0 {
 		return fmt.Errorf("no Handlers. call service.SetHandler")
@@ -531,18 +533,14 @@ func (independent *Service) Start() error {
 		return fmt.Errorf("newManager: %w", err)
 	}
 
-	var err error
-
 	for category, raw := range independent.Handlers {
 		handler := raw.(base.Interface)
-		if err = independent.setHandlerClient(handler); err != nil {
-			err = fmt.Errorf("manager_client.New('%s'): %w", category, err)
-			goto errOccurred
+		if err := independent.setHandlerClient(handler); err != nil {
+			return fmt.Errorf("manager_client.New('%s'): %w", category, err)
 		}
 
-		if err = independent.startHandler(handler); err != nil {
-			err = fmt.Errorf("startHandler: %w", err)
-			goto errOccurred
+		if err := independent.startHandler(handler); err != nil {
+			return fmt.Errorf("startHandler: %w", err)
 		}
 	}
 
@@ -552,9 +550,8 @@ func (independent *Service) Start() error {
 	// prepare the extensions by calling them in the context.
 	// prepare the extensions by setting them into the independent.manager.
 
-	err = independent.manager.Start()
-	if err != nil {
-		err = fmt.Errorf("service.manager.Start: %w", err)
+	if err := independent.manager.Start(); err != nil {
+		return fmt.Errorf("service.manager.Start: %w", err)
 	}
 
 	//err = independent.Context.ServiceReady(independent.Logger)
@@ -562,43 +559,46 @@ func (independent *Service) Start() error {
 	//	goto errOccurred
 	//}
 
-errOccurred:
-	if independent.ctx != nil {
-		configClient := independent.ctx.Config()
-		if configClient != nil {
-			closeErr := configClient.Close()
-			if closeErr != nil {
-				return fmt.Errorf("exit: %w: configClient.Close: %w", err, closeErr)
-			}
-		}
-		depClient := independent.ctx.DepManager()
-		if depClient != nil {
-			closeErr := depClient.Close()
-			if closeErr != nil {
-				return fmt.Errorf("exit: %w: depClient.Close: %w", err, closeErr)
-			}
-		}
-	}
-
-	if err != nil {
-		//if independent.Context != nil {
-		//	independent.Logger.Warn("orchestra wasn't closed, close it")
-		//	independent.Logger.Warn("might happen a race condition." +
-		//		"if the error occurred in the handler" +
-		//		"here we will close the orchestra." +
-		//		"orchestra will close the service." +
-		//		"service will again will come to this place, since all controllers will be cleaned out" +
-		//		"and handler empty will come to here, it will try to close orchestra again",
-		//	)
-		//	closeErr := independent.Context.Close(independent.Logger)
-		//	if closeErr != nil {
-		//		independent.Logger.Fatal("service.Interface.Close", "error", closeErr, "error to print", err)
-		//	}
-		//}
-
-		return err
-	}
 	return nil
+
+	// todo close the context from the manager.
+	// errOccurred:
+	//	if independent.ctx != nil {
+	//		configClient := independent.ctx.Config()
+	//		if configClient != nil {
+	//			closeErr := configClient.Close()
+	//			if closeErr != nil {
+	//				return fmt.Errorf("exit: %w: configClient.Close: %w", err, closeErr)
+	//			}
+	//		}
+	//		depClient := independent.ctx.DepManager()
+	//		if depClient != nil {
+	//			closeErr := depClient.Close()
+	//			if closeErr != nil {
+	//				return fmt.Errorf("exit: %w: depClient.Close: %w", err, closeErr)
+	//			}
+	//		}
+	//	}
+	//
+	//	if err != nil {
+	//		//if independent.Context != nil {
+	//		//	independent.Logger.Warn("orchestra wasn't closed, close it")
+	//		//	independent.Logger.Warn("might happen a race condition." +
+	//		//		"if the error occurred in the handler" +
+	//		//		"here we will close the orchestra." +
+	//		//		"orchestra will close the service." +
+	//		//		"service will again will come to this place, since all controllers will be cleaned out" +
+	//		//		"and handler empty will come to here, it will try to close orchestra again",
+	//		//	)
+	//		//	closeErr := independent.Context.Close(independent.Logger)
+	//		//	if closeErr != nil {
+	//		//		independent.Logger.Fatal("service.Interface.Close", "error", closeErr, "error to print", err)
+	//		//	}
+	//		//}
+	//
+	//		return err
+	//	}
+	//	return nil
 }
 
 //
