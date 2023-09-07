@@ -240,49 +240,49 @@ func (test *TestServiceSuite) Test_15_handler() {
 	s().NoError(externalClient.Close())
 }
 
-//// Test_16_managerRequest tests the start of the manager and closing it by a command
-//func (test *TestServiceSuite) Test_16_managerRequest() {
-//	s := test.Suite.Require
-//
-//	test.newService()
-//	s().NoError(test.service.prepareConfig())
-//
-//	s().NoError(test.service.newManager())
-//
-//	handler := test.service.Handlers["main"].(base.Interface)
-//	err := test.service.setHandlerClient(handler)
-//	s().NoError(err)
-//
-//	go func() {
-//		s().NoError(test.service.startHandler(handler))
-//	}()
-//
-//	go func() {
-//		s().NoError(test.service.manager.Start())
-//	}()
-//
-//	// wait a bit until the handler and manager are initialized
-//	time.Sleep(time.Millisecond * 100)
-//
-//	// test sending a command to the manager
-//	externalConfig := test.service.config.Manager
-//	externalConfig.UrlFunc(clientConfig.Url)
-//	externalClient, err := client.New(externalConfig)
-//	s().NoError(err)
-//
-//	req := message.Request{
-//		Command:    "close",
-//		Parameters: key_value.Empty(),
-//	}
-//	reply, err := externalClient.Request(&req)
-//	s().NoError(err)
-//	s().True(reply.IsOK())
-//
-//	// clean out
-//	s().NoError(handler.Close())
-//	s().NoError(test.service.manager.Close())
-//}
-//
+// Test_16_managerRequest tests the start of the manager and closing it by a command
+func (test *TestServiceSuite) Test_16_managerRequest() {
+	s := test.Suite.Require
+
+	test.newService()
+	s().NoError(test.service.prepareConfig())
+
+	s().NoError(test.service.newManager())
+
+	handler := test.service.Handlers["main"].(base.Interface)
+	err := test.service.setHandlerClient(handler)
+	s().NoError(err)
+
+	go func() {
+		s().NoError(test.service.startHandler(handler))
+	}()
+
+	go func() {
+		s().NoError(test.service.manager.Start())
+	}()
+
+	// wait a bit until the handler and manager are initialized
+	time.Sleep(time.Millisecond * 100)
+
+	// test sending a command to the manager
+	externalConfig := test.service.config.Manager
+	externalConfig.UrlFunc(clientConfig.Url)
+	externalClient, err := client.New(externalConfig)
+	s().NoError(err)
+
+	req := message.Request{
+		Command:    "close",
+		Parameters: key_value.Empty(),
+	}
+	reply, err := externalClient.Request(&req)
+	s().NoError(err)
+	s().True(reply.IsOK())
+
+	// clean out
+	s().NoError(handler.Close())
+	s().NoError(test.service.manager.Close())
+}
+
 //// Test_17_run
 //// todo fix the independent run as it will return immediately.
 //func (test *TestServiceSuite) Test_17_run() {
