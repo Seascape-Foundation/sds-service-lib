@@ -517,6 +517,8 @@ func (independent *Service) startHandler(handler base.Interface) error {
 // Requires at least one handler.
 func (independent *Service) Start() error {
 	var err error
+	var startedHandlers []string
+
 	if len(independent.Handlers) == 0 {
 		err = fmt.Errorf("no Handlers. call service.SetHandler")
 		goto errOccurred
@@ -535,7 +537,7 @@ func (independent *Service) Start() error {
 	for category, raw := range independent.Handlers {
 		handler := raw.(base.Interface)
 		if err = independent.setHandlerClient(handler); err != nil {
-			err = fmt.Errorf("manager_client.New('%s'): %w", category, err)
+			err = fmt.Errorf("setHandlerClient('%s'): %w", category, err)
 			goto errOccurred
 		}
 
@@ -544,6 +546,7 @@ func (independent *Service) Start() error {
 			goto errOccurred
 		}
 
+		startedHandlers = append(startedHandlers, category)
 	}
 
 	// todo
@@ -567,6 +570,19 @@ errOccurred:
 		closeErr := independent.ctx.Close()
 		if closeErr != nil {
 			err = fmt.Errorf("%v: ctx.Close: %w", err, closeErr)
+		}
+
+		for _, category := range startedHandlers {
+			handler := independent.Handlers[category].(base.Interface)
+			handlerClient, newErr := manager_client.New(handler.Config())
+			if newErr != nil {
+				err = fmt.Errorf("%v: manager_client.New('%s'): %w", err, category, newErr)
+			} else {
+				if closeErr = handlerClient.Close(); closeErr != nil {
+					err = fmt.Errorf("%v: handlerClient('%s').Close: %w", err, category, closeErr)
+				}
+			}
+
 		}
 	}
 	return err
