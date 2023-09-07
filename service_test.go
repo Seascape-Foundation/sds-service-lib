@@ -86,9 +86,7 @@ func (test *TestServiceSuite) TearDownTest() {
 		win.Args = win.Args[:len(win.Args)-2]
 	}
 
-	if test.ctx.Running() {
-		s().NoError(test.ctx.Close())
-	}
+	s().NoError(test.ctx.Close())
 }
 
 func (test *TestServiceSuite) newService() {
@@ -135,6 +133,9 @@ func (test *TestServiceSuite) Test_10_New() {
 	s().NoError(err)
 	test.ctx = ctx
 	s().NoError(test.ctx.Start())
+
+	// Wait a bit for context initialization
+	time.Sleep(time.Millisecond * 100)
 
 	_, err = New(test.ctx)
 	s().NoError(err)
