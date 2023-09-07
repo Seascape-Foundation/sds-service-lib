@@ -37,7 +37,6 @@ type Service struct {
 	url                string
 	parentId           string
 	manager            *manager.Manager // manage this service from other parts
-	// as it should be called before the orchestra runs
 }
 
 // New service.
@@ -610,9 +609,9 @@ errOccurred:
 //	proxyConfiguration := independent.config.Proxy(dep.Url())
 //
 //	independent.Logger.Info("prepare proxy", "id", proxyConfiguration.Id)
-//	//err := dep.Run(proxyConfiguration.Instances[0].Port, independent.Logger)
+//	//err := dep.Start(proxyConfiguration.Instances[0].Port, independent.Logger)
 //	//if err != nil {
-//	//	return fmt.Errorf(`dep.Run("%s"): %w`, dep.Url(), err)
+//	//	return fmt.Errorf(`dep.Start("%s"): %w`, dep.Url(), err)
 //	//}
 //
 //	return nil
@@ -625,9 +624,9 @@ errOccurred:
 //	extensionConfiguration := independent.config.ExtensionByUrl(dep.Url())
 //
 //	independent.Logger.Info("prepare extension", "url", extensionConfiguration.Url, "port", extensionConfiguration.Port)
-//	err := dep.Run(extensionConfiguration.Port, independent.Logger)
+//	err := dep.Start(extensionConfiguration.Port, independent.Logger)
 //	if err != nil {
-//		return fmt.Errorf(`dep.Run("%s"): %w`, dep.Url(), err)
+//		return fmt.Errorf(`dep.Start("%s"): %w`, dep.Url(), err)
 //	}
 //	return nil
 //}

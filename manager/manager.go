@@ -112,7 +112,8 @@ func (m *Manager) SetDeps(configs []*clientConfig.Client) {
 	m.deps = configs
 }
 
-// Start the orchestra in the background. If it failed to run, then return an error.
+// Start the orchestra in the background.
+// If it failed to run, then return an error.
 // The url request is the main service to which this orchestra belongs too.
 //
 // The logger is the handler logger as it is. The orchestra will create its own logger from it.
