@@ -369,11 +369,12 @@ closeContext:
 }
 
 func (independent *Service) generateConfig() error {
+func (independent *Service) generateConfig() (*serviceConfig.Service, error) {
 	configClient := independent.ctx.Config()
 
 	generatedConfig, err := configClient.GenerateService(independent.id, independent.url, independent.Type)
 	if err != nil {
-		return fmt.Errorf("configClient.GenerateService('%s', '%s', '%s'): %w", independent.id, independent.url, independent.Type, err)
+		return nil, fmt.Errorf("configClient.GenerateService('%s', '%s', '%s'): %w", independent.id, independent.url, independent.Type, err)
 	}
 
 	// Get all handlers and add them into the service
@@ -381,7 +382,7 @@ func (independent *Service) generateConfig() error {
 		handler := raw.(base.Interface)
 		generatedHandler, err := configClient.GenerateHandler(handler.Type(), category, false)
 		if err != nil {
-			return fmt.Errorf("configClient.GenerateHandler('%s', '%s', internal: false): %w", handler.Type(), category, err)
+			return nil, fmt.Errorf("configClient.GenerateHandler('%s', '%s', internal: false): %w", handler.Type(), category, err)
 		}
 
 		handler.SetConfig(generatedHandler)
@@ -393,13 +394,11 @@ func (independent *Service) generateConfig() error {
 	// Notify the config engine to update the service.
 	if len(independent.Handlers) > 0 {
 		if err := configClient.SetService(generatedConfig); err != nil {
-			return fmt.Errorf("configClient.SetService('generated'): %w", err)
+			return nil, fmt.Errorf("configClient.SetService('generated'): %w", err)
 		}
 	}
 
-	independent.config = generatedConfig
-
-	return nil
+	return generatedConfig, nil
 }
 
 // lintConfig gets the configuration from the context and sets them in the service and handler.
@@ -457,9 +456,12 @@ func (independent *Service) prepareConfig() error {
 	}
 
 	if !exist {
-		if err = independent.generateConfig(); err != nil {
+		generatedConfig, err := independent.generateConfig()
+		if err != nil {
 			return fmt.Errorf("generateConfig: %w", err)
 		}
+		independent.config = generatedConfig
+
 		return nil
 	}
 
