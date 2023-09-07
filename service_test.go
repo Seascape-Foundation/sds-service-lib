@@ -87,6 +87,8 @@ func (test *TestServiceSuite) TearDownTest() {
 	}
 
 	s().NoError(test.ctx.Close())
+	// Wait a bit for closing the threads
+	time.Sleep(time.Millisecond * 100)
 }
 
 func (test *TestServiceSuite) newService() {
