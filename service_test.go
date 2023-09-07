@@ -184,20 +184,20 @@ func (test *TestServiceSuite) Test_13_prepareConfig() {
 	s().NotNil(test.service.config)
 }
 
-//// Test_14_manager tests the creation of the manager and linting it with the handler.
-//func (test *TestServiceSuite) Test_14_manager() {
-//	s := test.Suite.Require
-//
-//	test.newService()
-//	s().NoError(test.service.prepareConfig())
-//
-//	s().NoError(test.service.newManager())
-//
-//	handler := test.service.Handlers["main"].(base.Interface)
-//	err := test.service.setHandlerClient(handler)
-//	s().NoError(err)
-//}
-//
+// Test_14_manager tests the creation of the manager and linting it with the handler.
+func (test *TestServiceSuite) Test_14_manager() {
+	s := test.Suite.Require
+
+	test.newService()
+	s().NoError(test.service.prepareConfig())
+
+	s().NoError(test.service.newManager())
+
+	handler := test.service.Handlers["main"].(base.Interface)
+	err := test.service.setHandlerClient(handler)
+	s().NoError(err)
+}
+
 //// Test_15_handler tests setup and start of the handler
 //func (test *TestServiceSuite) Test_15_handler() {
 //	s := test.Suite.Require
