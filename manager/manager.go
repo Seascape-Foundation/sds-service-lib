@@ -6,7 +6,7 @@ import (
 	clientConfig "github.com/ahmetson/client-lib/config"
 	"github.com/ahmetson/common-lib/data_type/key_value"
 	"github.com/ahmetson/common-lib/message"
-	"github.com/ahmetson/dev-lib/dep_client"
+	context "github.com/ahmetson/dev-lib"
 	"github.com/ahmetson/handler-lib/base"
 	handlerConfig "github.com/ahmetson/handler-lib/config"
 	"github.com/ahmetson/handler-lib/manager_client"
@@ -18,22 +18,23 @@ import (
 type Manager struct {
 	serviceUrl     string
 	handler        base.Interface // manage this service from other parts. it should be called before the orchestra runs
+	handlerManager manager_client.Interface
 	logger         *log.Logger
 	handlerClients []manager_client.Interface
-	depClient      dep_client.Interface
 	deps           []*clientConfig.Client
+	ctx            context.Interface
 }
 
 // New service with the parameters.
 // Parameter order: id, url, context type
-func New(client *clientConfig.Client) *Manager {
+func New(ctx context.Interface, client *clientConfig.Client) (*Manager, error) {
 	handler := syncReplier.New()
 
 	h := &Manager{
+		ctx:            ctx,
 		handler:        handler,
 		serviceUrl:     client.ServiceUrl,
 		logger:         nil,
-		depClient:      nil,
 		handlerClients: make([]manager_client.Interface, 0),
 		deps:           make([]*clientConfig.Client, 0),
 	}
@@ -41,39 +42,66 @@ func New(client *clientConfig.Client) *Manager {
 	managerConfig := h.Config(client)
 	handler.SetConfig(managerConfig)
 
-	return h
+	handlerManager, err := manager_client.New(managerConfig)
+	if err != nil {
+		return nil, fmt.Errorf("manager_client.New: %w", err)
+	}
+	h.handlerManager = handlerManager
+
+	return h, nil
 }
 
-// Close the manager itself
+// Close the service.
+//
+// It closes all running handlers.
+//
+// It closes the dependencies.
+//
+// It closes the context.
+//
+// It closes this manager.
+//
+// todo It doesn't close the proxies, which it must close.
 func (m *Manager) Close() error {
-	return m.handler.Close()
-}
-
-// onClose closing all the dependencies in the orchestra as well as all handlers
-func (m *Manager) onClose(req message.Request) message.Reply {
-	m.logger.Info("service received a signal to close", "service url", m.serviceUrl)
-
 	// closing all handlers
 	for _, client := range m.handlerClients {
-		parts, _, err := client.Parts()
+		err := client.Close()
 		if err != nil {
-			return req.Fail(fmt.Sprintf("client.Parts: %v", err))
-		}
-		for _, part := range parts {
-			// I expect that the killing process will release its resources as well.
-			err := client.ClosePart(part)
-			if err != nil {
-				return req.Fail(fmt.Sprintf(`handler.ClosePart("%s"): %v`, part, err))
-			}
+			return fmt.Errorf("handlerManagerClient('%s').Close: %v", client.Id(), err)
 		}
 	}
 
 	// closing all dependencies
+	depClient := m.ctx.DepManager()
 	for _, c := range m.deps {
-		if err := m.depClient.CloseDep(c); err != nil {
-			return req.Fail(fmt.Sprintf("depClient.CloseDep('%s'): %v", c.Id, err))
+		if err := depClient.CloseDep(c); err != nil {
+			return fmt.Errorf("depClient.CloseDep('%s'): %v", c.Id, err)
 		}
 	}
+
+	err := m.ctx.Close()
+	if err != nil {
+		return fmt.Errorf("ctx.Close: %w", err)
+	}
+
+	err = m.handlerManager.Close()
+	if err != nil {
+		return fmt.Errorf("handler.Close: %w", err)
+	}
+
+	return nil
+}
+
+// onClose received a close signal for this service
+func (m *Manager) onClose(req message.Request) message.Reply {
+	m.logger.Info("service received a signal to close", "service url", m.serviceUrl)
+
+	err := m.Close()
+	if err != nil {
+		return req.Fail(fmt.Sprintf("manager.Close: %v", err))
+	}
+
+	m.logger.Info("service closed", "service url", m.serviceUrl)
 
 	return req.Ok(key_value.Empty())
 }
@@ -107,10 +135,6 @@ func (m *Manager) SetLogger(parent *log.Logger) error {
 
 func (m *Manager) SetHandlerClients(clients []manager_client.Interface) {
 	m.handlerClients = append(m.handlerClients, clients...)
-}
-
-func (m *Manager) SetDepClient(client dep_client.Interface) {
-	m.depClient = client
 }
 
 func (m *Manager) SetDeps(configs []*clientConfig.Client) {

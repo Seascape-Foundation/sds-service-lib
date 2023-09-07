@@ -47,11 +47,7 @@ type Service struct {
 // The created context is started.
 // By default, the service uses' config.DevContext.
 // It could be overwritten by a flag config.ContextFlag.
-func New(ctx context.Interface) (*Service, error) {
-	if !ctx.Running() {
-		return nil, fmt.Errorf("context is not running. call ctx.Start() as a goroutine")
-	}
-
+func New() (*Service, error) {
 	id := ""
 	url := ""
 
@@ -67,6 +63,14 @@ func New(ctx context.Interface) (*Service, error) {
 	}
 
 	// Start the context
+	ctx, err := context.New()
+	if err != nil {
+		return nil, fmt.Errorf("context.New: %w", err)
+	}
+	err = ctx.Start()
+	if err != nil {
+		return nil, fmt.Errorf("ctx('%s').Start: %w", ctx.Type(), err)
+	}
 
 	independent := &Service{
 		ctx:             ctx,
@@ -81,11 +85,8 @@ func New(ctx context.Interface) (*Service, error) {
 	if err != nil {
 		err = fmt.Errorf("log.New(%s): %w", id, err)
 
-		if closeErr := ctx.Config().Close(); closeErr != nil {
-			return nil, fmt.Errorf("%v: ctx.Config().Close: %w", err, closeErr)
-		}
-		if closeErr := ctx.DepManager().Close(); closeErr != nil {
-			return nil, fmt.Errorf("%v: ctx.DepManager.Close: %w", err, closeErr)
+		if closeErr := ctx.Close(); closeErr != nil {
+			return nil, fmt.Errorf("%v: ctx.Close: %w", err, closeErr)
 		}
 
 		return nil, err
@@ -100,12 +101,8 @@ func New(ctx context.Interface) (*Service, error) {
 		logger.Info("environment file", "path", os.Args[len(os.Args)-1])
 		if err != nil {
 			err = fmt.Errorf("configClient.String('%s'): %w", config.IdEnv, err)
-			if closeErr := ctx.Config().Close(); closeErr != nil {
-				return nil, fmt.Errorf("%v: ctx.Config().Close: %w", err, closeErr)
-			}
-			if closeErr := ctx.DepManager().Close(); closeErr != nil {
-				return nil, fmt.Errorf("%v: ctx.DepManager.Close: %w", err, closeErr)
-
+			if closeErr := ctx.Close(); closeErr != nil {
+				return nil, fmt.Errorf("%v: ctx.Close: %w", err, closeErr)
 			}
 			return nil, err
 		}
@@ -115,12 +112,8 @@ func New(ctx context.Interface) (*Service, error) {
 		url, err = configClient.String(config.UrlEnv)
 		if err != nil {
 			err = fmt.Errorf("configClient.String('%s'): %w", config.UrlEnv, err)
-			if closeErr := ctx.Config().Close(); closeErr != nil {
-				return nil, fmt.Errorf("%v: ctx.Config().Close: %w", err, closeErr)
-			}
-			if closeErr := ctx.DepManager().Close(); closeErr != nil {
-				return nil, fmt.Errorf("%v: ctx.DepManager.Close: %w", err, closeErr)
-
+			if closeErr := ctx.Close(); closeErr != nil {
+				return nil, fmt.Errorf("%v: ctx.Close: %w", err, closeErr)
 			}
 			return nil, err
 		}
@@ -133,21 +126,15 @@ func New(ctx context.Interface) (*Service, error) {
 
 	if len(id) == 0 {
 		err = fmt.Errorf("service can not identify itself. Either use %s flag or %s environment variable", config.IdFlag, config.IdEnv)
-		if closeErr := ctx.Config().Close(); closeErr != nil {
-			return nil, fmt.Errorf("%v: ctx.Config().Close: %w", err, closeErr)
-		}
-		if closeErr := ctx.DepManager().Close(); closeErr != nil {
-			return nil, fmt.Errorf("%v: ctx.DepManager.Close: %w", err, closeErr)
+		if closeErr := ctx.Close(); closeErr != nil {
+			return nil, fmt.Errorf("%v: ctx.Close: %w", err, closeErr)
 		}
 		return nil, err
 	}
 	if len(url) == 0 {
 		err = fmt.Errorf("service can not identify it's class. Either use %s flag or %s environment variable", config.UrlFlag, config.UrlEnv)
-		if closeErr := ctx.Config().Close(); closeErr != nil {
-			return nil, fmt.Errorf("%v: ctx.Config().Close: %w", err, closeErr)
-		}
-		if closeErr := ctx.DepManager().Close(); closeErr != nil {
-			return nil, fmt.Errorf("%v: ctx.DepManager.Close: %w", err, closeErr)
+		if closeErr := ctx.Close(); closeErr != nil {
+			return nil, fmt.Errorf("%v: ctx.Close: %w", err, closeErr)
 		}
 		return nil, err
 	}
@@ -482,19 +469,21 @@ func (independent *Service) prepareConfig() error {
 //
 // The manager.Manager depends on Logger, set automatically.
 //
-// This function lints manager.Manager with dep_manager set automatically from ctx.
+// This function lints manager.Manager with ctx.
 func (independent *Service) newManager() error {
 	if independent.config == nil {
 		return fmt.Errorf("independent.config is nill")
 	}
-	m := manager.New(independent.config.Manager)
-	err := m.SetLogger(independent.Logger)
+	m, err := manager.New(independent.ctx, independent.config.Manager)
+	if err != nil {
+		return fmt.Errorf("manager.New: %w", err)
+	}
+	err = m.SetLogger(independent.Logger)
 	if err != nil {
 		return fmt.Errorf("manager.SetLogger: %w", err)
 	}
 	independent.manager = m
 
-	independent.manager.SetDepClient(independent.ctx.DepManager())
 	return nil
 }
 
@@ -613,7 +602,7 @@ func (independent *Service) Start() error {
 //// if dependency doesn't exist, it will be downloaded
 //func (independent *Service) prepareProxy(dep *dev.Dep) error {
 //	// todo find the proxy url by it's id in the services list.
-//	// the config.Proxy() accepts id not a url.
+//	// the config.Proxy() accepts id not url.
 //	proxyConfiguration := independent.config.Proxy(dep.Url())
 //
 //	independent.Logger.Info("prepare proxy", "id", proxyConfiguration.Id)

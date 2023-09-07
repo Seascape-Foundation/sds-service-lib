@@ -6,9 +6,9 @@ import (
 	clientConfig "github.com/ahmetson/client-lib/config"
 	"github.com/ahmetson/common-lib/data_type/key_value"
 	"github.com/ahmetson/common-lib/message"
-	context "github.com/ahmetson/dev-lib"
 	"github.com/ahmetson/handler-lib/base"
 	handlerConfig "github.com/ahmetson/handler-lib/config"
+	"github.com/ahmetson/handler-lib/manager_client"
 	"github.com/ahmetson/handler-lib/sync_replier"
 	"github.com/ahmetson/log-lib"
 	"github.com/ahmetson/os-lib/arg"
@@ -33,7 +33,6 @@ type TestServiceSuite struct {
 	id         string   // the id of the dependency
 	envPath    string
 	handler    base.Interface
-	ctx        context.Interface
 	logger     *log.Logger
 }
 
@@ -67,11 +66,6 @@ func (test *TestServiceSuite) SetupTest() {
 	s().NoError(syncReplier.Route("hello", onHello))
 	test.handler = syncReplier
 
-	ctx, err := context.New()
-	s().NoError(err)
-	test.ctx = ctx
-	s().NoError(test.ctx.Start())
-
 	test.logger, err = log.New("test", true)
 	s().NoError(err)
 }
@@ -84,12 +78,13 @@ func (test *TestServiceSuite) TearDownTest() {
 
 	// newService sets the test.service
 	if test.service != nil {
+		s().NoError(test.service.ctx.Close())
+
 		test.service = nil
 
 		win.Args = win.Args[:len(win.Args)-2]
 	}
 
-	s().NoError(test.ctx.Close())
 	// Wait a bit for closing the threads
 	time.Sleep(time.Millisecond * 100)
 }
@@ -99,7 +94,7 @@ func (test *TestServiceSuite) newService() {
 
 	win.Args = append(win.Args, arg.NewFlag(config.IdFlag, test.id), arg.NewFlag(config.UrlFlag, test.url))
 
-	created, err := New(test.ctx)
+	created, err := New()
 	s().NoError(err)
 
 	test.service = created
@@ -138,17 +133,20 @@ func (test *TestServiceSuite) managerClient() *client.Socket {
 func (test *TestServiceSuite) Test_10_New() {
 	s := test.Suite.Require
 
-	// creating a new config must fail since
+	// creating a new service must fail since
 	// no flag or environment variable to identify service
-	_, err := New(test.ctx)
+	_, err := New()
 	s().Error(err)
+
+	// Wait a bit for closing context threads
+	time.Sleep(time.Millisecond * 100)
 
 	// Pass a flag
 	idFlag := arg.NewFlag(config.IdFlag, test.id)
 	urlFlag := arg.NewFlag(config.UrlFlag, test.url)
 	win.Args = append(win.Args, idFlag, urlFlag)
 
-	_, err = New(test.ctx)
+	independent, err := New()
 	s().NoError(err)
 
 	// Clean out the os args
@@ -156,27 +154,29 @@ func (test *TestServiceSuite) Test_10_New() {
 
 	test.logger.Info("close the already running context....")
 
-	// remove the created, and try from environment variable
-	s().NoError(test.ctx.Close())
+	// remove the created service.
+	// to re-create the service, we must close the context.
+	s().NoError(independent.ctx.Close())
 	// wait a bit for closing context threads
 	time.Sleep(time.Millisecond * 500)
 
 	// try to load from the environment variable parameters
 	win.Args = append(win.Args, test.envPath)
 
-	ctx, err := context.New()
+	independent, err = New()
 	s().NoError(err)
-	test.ctx = ctx
-	s().NoError(test.ctx.Start(), "context start failed")
 
 	// Wait a bit for context initialization
 	time.Sleep(time.Millisecond * 100)
 
-	_, err = New(test.ctx)
-	s().NoError(err)
-
 	// remove the environment variable from arguments
 	win.Args = win.Args[:len(win.Args)-1]
+
+	// remove the created service, and try from environment variable
+	s().NoError(independent.ctx.Close())
+
+	// Wait a bit for closing context threads
+	time.Sleep(time.Millisecond * 100)
 }
 
 // Test_11_generateConfig creates a configuration and sets it in the service
@@ -259,7 +259,9 @@ func (test *TestServiceSuite) Test_15_handler() {
 	s().True(reply.IsOK())
 
 	// close the handler
-	s().NoError(handler.Close())
+	handlerManager, err := manager_client.New(handler.Config())
+	s().NoError(err)
+	s().NoError(handlerManager.Close())
 	s().NoError(externalClient.Close())
 }
 
@@ -293,13 +295,17 @@ func (test *TestServiceSuite) Test_16_managerRequest() {
 		Command:    "close",
 		Parameters: key_value.Empty(),
 	}
-	reply, err := externalClient.Request(&req)
+	err = externalClient.Submit(&req)
 	s().NoError(err)
-	s().True(reply.IsOK())
+
+	// Wait a bit for closing service threads
+	time.Sleep(time.Millisecond * 100)
+
+	// make sure that context is not running
+	s().False(test.service.ctx.Running())
 
 	// clean out
-	s().NoError(handler.Close())
-	s().NoError(test.service.manager.Close())
+	test.service = nil
 }
 
 // Test_17_Start test service start.
@@ -339,8 +345,13 @@ func (test *TestServiceSuite) Test_17_Start() {
 	s().True(reply.IsOK())
 
 	// clean out
-	s().NoError(mainHandler.Close())
+	// we don't close the handler here by calling mainHandler.Close.
+	//
+	// the service manager must close all handlers.
 	s().NoError(test.service.manager.Close())
+
+	// since we closed by manager, the cleaning-out by test suite not necessary.
+	test.service = nil
 }
 
 // In order for 'go test' to run this suite, we need to create
