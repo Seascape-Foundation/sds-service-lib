@@ -78,6 +78,11 @@ func (m *Manager) onClose(req message.Request) message.Reply {
 	return req.Ok(key_value.Empty())
 }
 
+// onHeartbeat simple handler to check that service is alive
+func (m *Manager) onHeartbeat(req message.Request) message.Reply {
+	return req.Ok(key_value.Empty())
+}
+
 // Config of the manager
 func (m *Manager) Config(client *clientConfig.Client) *handlerConfig.Handler {
 	return &handlerConfig.Handler{
@@ -122,6 +127,9 @@ func (m *Manager) Start() error {
 		return fmt.Errorf("logger not set. call SetLogger first")
 	}
 	if err := m.handler.Route("close", m.onClose); err != nil {
+		return fmt.Errorf(`handler.Route("close"): %w`, err)
+	}
+	if err := m.handler.Route("heartbeat", m.onHeartbeat); err != nil {
 		return fmt.Errorf(`handler.Route("close"): %w`, err)
 	}
 
