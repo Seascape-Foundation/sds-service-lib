@@ -23,6 +23,7 @@ type Manager struct {
 	handlerClients []manager_client.Interface
 	deps           []*clientConfig.Client
 	ctx            context.Interface
+	running        bool
 }
 
 // New service with the parameters.
@@ -89,7 +90,13 @@ func (m *Manager) Close() error {
 		return fmt.Errorf("handler.Close: %w", err)
 	}
 
+	m.running = false
+
 	return nil
+}
+
+func (m *Manager) Running() bool {
+	return m.running
 }
 
 // onClose received a close signal for this service
@@ -160,6 +167,8 @@ func (m *Manager) Start() error {
 	if err := m.handler.Start(); err != nil {
 		return fmt.Errorf("handler.Start: %w", err)
 	}
+
+	m.running = true
 
 	return nil
 }

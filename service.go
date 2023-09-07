@@ -582,7 +582,13 @@ errOccurred:
 					err = fmt.Errorf("%v: handlerClient('%s').Close: %w", err, category, closeErr)
 				}
 			}
+		}
 
+		if independent.manager.Running() {
+			closeErr = independent.manager.Close()
+			if closeErr != nil {
+				err = fmt.Errorf("%v: manager.Close: %w", err, closeErr)
+			}
 		}
 	}
 	return err
