@@ -211,9 +211,7 @@ func (test *TestServiceSuite) Test_15_handler() {
 	s().NoError(test.service.newManager())
 
 	handler := test.service.Handlers["main"].(base.Interface)
-	go func() {
-		s().NoError(test.service.startHandler(handler))
-	}()
+	s().NoError(test.service.startHandler(handler))
 
 	// wait a bit until the handler is initialized
 	time.Sleep(time.Millisecond * 100)
@@ -253,13 +251,9 @@ func (test *TestServiceSuite) Test_16_managerRequest() {
 	err := test.service.setHandlerClient(handler)
 	s().NoError(err)
 
-	go func() {
-		s().NoError(test.service.startHandler(handler))
-	}()
+	s().NoError(test.service.startHandler(handler))
 
-	go func() {
-		s().NoError(test.service.manager.Start())
-	}()
+	s().NoError(test.service.manager.Start())
 
 	// wait a bit until the handler and manager are initialized
 	time.Sleep(time.Millisecond * 100)
