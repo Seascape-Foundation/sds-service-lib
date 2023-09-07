@@ -476,7 +476,13 @@ func (independent *Service) prepareConfig() error {
 	return nil
 }
 
-// newManager creates a manager of the service.
+// newManager creates a manager.Manager and assigns it to manager, otherwise manager is nil.
+//
+// The manager.Manager depends on config set by prepareConfig.
+//
+// The manager.Manager depends on Logger, set automatically.
+//
+// This function lints manager.Manager with dep_manager set automatically from ctx.
 func (independent *Service) newManager() error {
 	if independent.config == nil {
 		return fmt.Errorf("independent.config is nill")
