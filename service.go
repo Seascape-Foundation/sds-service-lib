@@ -368,7 +368,11 @@ closeContext:
 	return err
 }
 
-func (independent *Service) generateConfig() error {
+// generateConfig sends a signal to the context to generate a new configuration for this service.
+// The method requests multiple commands. One command to generate a service configuration.
+// Then a request to generate a handler configurations.
+//
+// The generated configuration returned back.
 func (independent *Service) generateConfig() (*serviceConfig.Service, error) {
 	configClient := independent.ctx.Config()
 
