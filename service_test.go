@@ -168,16 +168,22 @@ func (test *TestServiceSuite) Test_12_lintConfig() {
 	s().NoError(test.service.lintConfig())
 }
 
-//// Test_13_prepareConfig is calling lint config since the configuration exists in the context.
-//func (test *TestServiceSuite) Test_13_prepareConfig() {
-//	s := test.Suite.Require
-//
-//	test.newService()
-//
-//	// It should call the test.service.lintConfig
-//	s().NoError(test.service.prepareConfig())
-//}
-//
+// Test_13_prepareConfig is calling lint config since the configuration exists in the context.
+func (test *TestServiceSuite) Test_13_prepareConfig() {
+	s := test.Suite.Require
+
+	test.newService()
+
+	// by default no configuration
+	s().Nil(test.service.config)
+
+	// It should call the test.service.lintConfig
+	s().NoError(test.service.prepareConfig())
+
+	// Config must be set
+	s().NotNil(test.service.config)
+}
+
 //// Test_14_manager tests the creation of the manager and linting it with the handler.
 //func (test *TestServiceSuite) Test_14_manager() {
 //	s := test.Suite.Require
