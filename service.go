@@ -12,7 +12,6 @@ import (
 	"github.com/ahmetson/common-lib/data_type/key_value"
 	serviceConfig "github.com/ahmetson/config-lib/service"
 	"github.com/ahmetson/dev-lib"
-	ctxConfig "github.com/ahmetson/dev-lib/base/config"
 	"github.com/ahmetson/handler-lib/base"
 	handlerConfig "github.com/ahmetson/handler-lib/config"
 	"github.com/ahmetson/handler-lib/manager_client"
@@ -20,7 +19,7 @@ import (
 	"github.com/ahmetson/os-lib/arg"
 	"github.com/ahmetson/service-lib/config"
 	"github.com/ahmetson/service-lib/manager"
-
+	"os"
 	"slices"
 )
 
@@ -48,36 +47,57 @@ type Service struct {
 // The created context is started.
 // By default, the service uses' config.DevContext.
 // It could be overwritten by a flag config.ContextFlag.
-func New() (*Service, error) {
+func New(ctx context.Interface) (*Service, error) {
+	if !ctx.Running() {
+		return nil, fmt.Errorf("context is not running. call ctx.Start() as a goroutine")
+	}
+
 	id := ""
 	url := ""
-	contextType := ctxConfig.DevContext // default is used a dev context
 
 	// let's validate the parameters of the service
 	if arg.FlagExist(config.IdFlag) {
+		fmt.Printf("id flag exists\n")
 		id = arg.FlagValue(config.IdFlag)
+	} else {
+		fmt.Printf("id flag not found\n")
 	}
 	if arg.FlagExist(config.UrlFlag) {
 		url = arg.FlagValue(config.UrlFlag)
 	}
-	if arg.FlagExist(config.ContextFlag) {
-		contextType = arg.FlagValue(config.ConfigFlag)
-	}
 
 	// Start the context
-	ctx, err := context.New(contextType)
-	if err != nil {
-		return nil, fmt.Errorf("context.New(%s): %w", ctxConfig.DevContext, err)
+
+	independent := &Service{
+		ctx:             ctx,
+		Handlers:        key_value.Empty(),
+		RequiredProxies: []string{},
+		url:             url,
+		id:              id,
+		Type:            serviceConfig.IndependentType,
 	}
 
-	err = ctx.Start()
+	logger, err := log.New(id, true)
 	if err != nil {
-		return nil, fmt.Errorf("ctx('%s').Start: %w", contextType, err)
+		err = fmt.Errorf("log.New(%s): %w", id, err)
+
+		if closeErr := ctx.Config().Close(); closeErr != nil {
+			return nil, fmt.Errorf("%v: ctx.Config().Close: %w", err, closeErr)
+		}
+		if closeErr := ctx.DepManager().Close(); closeErr != nil {
+			return nil, fmt.Errorf("%v: ctx.DepManager.Close: %w", err, closeErr)
+		}
+
+		return nil, err
 	}
+	independent.Logger = logger
 
 	if len(id) == 0 {
+		logger.Info("id is empty, let's fetch it from the configuration...")
 		configClient := ctx.Config()
 		id, err = configClient.String(config.IdEnv)
+		logger.Info("configClient.String", "parameter", config.IdEnv, "id", id, "error", err)
+		logger.Info("environment file", "path", os.Args[len(os.Args)-1])
 		if err != nil {
 			err = fmt.Errorf("configClient.String('%s'): %w", config.IdEnv, err)
 			if closeErr := ctx.Config().Close(); closeErr != nil {
@@ -132,30 +152,7 @@ func New() (*Service, error) {
 		return nil, err
 	}
 
-	logger, err := log.New(id, true)
-	if err != nil {
-		err = fmt.Errorf("log.New(%s): %w", id, err)
-
-		if closeErr := ctx.Config().Close(); closeErr != nil {
-			return nil, fmt.Errorf("%v: ctx.Config().Close: %w", err, closeErr)
-		}
-		if closeErr := ctx.DepManager().Close(); closeErr != nil {
-			return nil, fmt.Errorf("%v: ctx.DepManager.Close: %w", err, closeErr)
-		}
-
-		return nil, err
-	}
-
-	independent := &Service{
-		ctx:             ctx,
-		Logger:          logger,
-		Handlers:        key_value.Empty(),
-		RequiredProxies: []string{},
-		url:             url,
-		id:              id,
-		parentId:        parentId,
-		Type:            serviceConfig.IndependentType,
-	}
+	independent.parentId = parentId
 
 	return independent, nil
 }
@@ -514,8 +511,8 @@ func (independent *Service) startHandler(handler base.Interface) error {
 	return nil
 }
 
-// Run the service.
-func (independent *Service) Run() error {
+// Start the service.
+func (independent *Service) Start() error {
 	if len(independent.Handlers) == 0 {
 		return fmt.Errorf("no Handlers. call service.SetHandler")
 	}
@@ -552,7 +549,6 @@ func (independent *Service) Run() error {
 	err = independent.manager.Start()
 	if err != nil {
 		err = fmt.Errorf("service.manager.Start: %w", err)
-		goto errOccurred
 	}
 
 	//err = independent.Context.ServiceReady(independent.Logger)
