@@ -146,25 +146,28 @@ func (test *TestServiceSuite) Test_10_New() {
 	win.Args = win.Args[:len(win.Args)-1]
 }
 
-//
-//// Test_11_generateConfig creates a configuration and sets it in the service
-//func (test *TestServiceSuite) Test_11_generateConfig() {
-//	s := test.Suite.Require
-//
-//	test.newService()
-//
-//	s().NoError(test.service.generateConfig())
-//}
-//
-//// Test_12_lintConfig loads the configuration of the service and sets it
-//func (test *TestServiceSuite) Test_12_lintConfig() {
-//	s := test.Suite.Require
-//
-//	test.newService()
-//
-//	s().NoError(test.service.lintConfig())
-//}
-//
+// Test_11_generateConfig creates a configuration and sets it in the service
+func (test *TestServiceSuite) Test_11_generateConfig() {
+	s := test.Suite.Require
+
+	test.newService()
+
+	_, err := test.service.generateConfig()
+	s().NoError(err)
+}
+
+// Test_12_lintConfig loads the configuration of the service and sets it
+func (test *TestServiceSuite) Test_12_lintConfig() {
+	s := test.Suite.Require
+
+	test.newService()
+
+	_, err := test.service.generateConfig()
+	s().NoError(err)
+
+	s().NoError(test.service.lintConfig())
+}
+
 //// Test_13_prepareConfig is calling lint config since the configuration exists in the context.
 //func (test *TestServiceSuite) Test_13_prepareConfig() {
 //	s := test.Suite.Require
