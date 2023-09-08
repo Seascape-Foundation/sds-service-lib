@@ -605,7 +605,7 @@ errOccurred:
 ////
 //// if dependency doesn't exist, it will be downloaded
 //func (independent *Service) prepareProxy(dep *dev.Dep) error {
-//	// todo find the proxy url by it's id in the services list.
+//	// todo find the proxy url by its id in the services list.
 //	// the config.Proxy() accepts id not url.
 //	proxyConfiguration := independent.config.Proxy(dep.Url())
 //
