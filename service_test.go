@@ -47,7 +47,7 @@ func (test *TestServiceSuite) SetupTest() {
 
 	// A valid source code that we want to download
 	test.url = "github.com/ahmetson/service-lib"
-	test.id = "service-lib"
+	test.id = "service_1"
 
 	test.envPath = filepath.Join(currentDir, ".test.env")
 
