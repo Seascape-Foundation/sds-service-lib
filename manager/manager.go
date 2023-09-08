@@ -24,13 +24,13 @@ type Manager struct {
 	handlerClients []manager_client.Interface
 	deps           []*clientConfig.Client
 	ctx            context.Interface
-	blocker        *sync.WaitGroup // block the service
+	blocker        **sync.WaitGroup // block the service
 	running        bool
 }
 
 // New service with the parameters.
 // Parameter order: id, url, context type
-func New(ctx context.Interface, blocker *sync.WaitGroup, client *clientConfig.Client) (*Manager, error) {
+func New(ctx context.Interface, blocker **sync.WaitGroup, client *clientConfig.Client) (*Manager, error) {
 	handler := syncReplier.New()
 
 	h := &Manager{
@@ -94,7 +94,10 @@ func (m *Manager) Close() error {
 
 	m.running = false
 	if m.blocker != nil {
-		m.blocker.Done()
+		fmt.Printf("blocker done!\n")
+		(*m.blocker).Done()
+	} else {
+		fmt.Printf("blocker is nil\n")
 	}
 
 	return nil

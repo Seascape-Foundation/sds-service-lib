@@ -474,7 +474,7 @@ func (independent *Service) newManager() error {
 	if independent.config == nil {
 		return fmt.Errorf("independent.config is nill")
 	}
-	m, err := manager.New(independent.ctx, independent.blocker, independent.config.Manager)
+	m, err := manager.New(independent.ctx, &independent.blocker, independent.config.Manager)
 	if err != nil {
 		return fmt.Errorf("manager.New: %w", err)
 	}
