@@ -55,10 +55,7 @@ func New() (*Service, error) {
 
 	// let's validate the parameters of the service
 	if arg.FlagExist(config.IdFlag) {
-		fmt.Printf("id flag exists\n")
 		id = arg.FlagValue(config.IdFlag)
-	} else {
-		fmt.Printf("id flag not found\n")
 	}
 	if arg.FlagExist(config.UrlFlag) {
 		url = arg.FlagValue(config.UrlFlag)
