@@ -316,7 +316,8 @@ func (test *TestServiceSuite) Test_17_Start() {
 
 	test.newService()
 
-	s().NoError(test.service.Start())
+	_, err := test.service.Start()
+	s().NoError(err)
 
 	// wait a bit for thread initialization
 	time.Sleep(time.Millisecond * 100)

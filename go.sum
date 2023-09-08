@@ -53,6 +53,10 @@ github.com/ahmetson/common-lib v0.0.0-20230825195825-e7b69549b9a1 h1:kcw97M9jxES
 github.com/ahmetson/common-lib v0.0.0-20230825195825-e7b69549b9a1/go.mod h1:33pBXMtRGX5Xseh5t9t9xfo8jaeHNkE3yYyNRdXoY3Y=
 github.com/ahmetson/config-lib v0.0.0-20230908094846-24b233553470 h1:bb6YRIIxdDMuRVZrqxzPtpxBOcr9NsZMBg+VP7/pMVk=
 github.com/ahmetson/config-lib v0.0.0-20230908094846-24b233553470/go.mod h1:uaQLO9abIyrArjma13U7XpBmxGDwgTOAZpsj9p565og=
+github.com/ahmetson/config-lib v0.0.0-20230908111518-e87be1a97d4c h1:S8iedbnv+eTPVFRNwX5q5oZf3Pb8jaqSw1AfuM/tnWo=
+github.com/ahmetson/config-lib v0.0.0-20230908111518-e87be1a97d4c/go.mod h1:u4gZl5WabfM0qzBS+4VlyBXjA1oNEqtZ4WBgFQM9bZk=
+github.com/ahmetson/config-lib v0.0.0-20230908120313-ee58ff67288b h1:FNYgAlaf9oTuoL9AV0YtDdaeNjEwYvhHb+ImKA1fRf0=
+github.com/ahmetson/config-lib v0.0.0-20230908120313-ee58ff67288b/go.mod h1:K70PziTcZRDzx8yWIfq4xHvSpdPBewAw/TwEWdwMF6Y=
 github.com/ahmetson/dev-lib v0.0.0-20230908073741-33d7893d546a h1:AmWwJppc66nG1QAbjQtY/2XlTH769mQ8qDgmZsNftf8=
 github.com/ahmetson/dev-lib v0.0.0-20230908073741-33d7893d546a/go.mod h1:CsOqz0QRYIiNbUlvKsDSeaUVfRjMewcjNXVf8ub0ruw=
 github.com/ahmetson/handler-lib v0.0.0-20230908055435-ceab4155ee16 h1:0YjJM8wtMhtnTSzGv0hxfK57+xHFVWqxIYHsj+30Zn4=

@@ -21,6 +21,7 @@ import (
 	"github.com/ahmetson/service-lib/manager"
 	"os"
 	"slices"
+	"sync"
 )
 
 // Service keeps all necessary parameters of the service.
@@ -35,6 +36,7 @@ type Service struct {
 	id                 string
 	url                string
 	parentId           string
+	blocker            *sync.WaitGroup
 	manager            *manager.Manager // manage this service from other parts
 }
 
@@ -79,6 +81,7 @@ func New() (*Service, error) {
 		url:             url,
 		id:              id,
 		Type:            serviceConfig.IndependentType,
+		blocker:         nil,
 	}
 
 	logger, err := log.New(id, true)
@@ -474,7 +477,7 @@ func (independent *Service) newManager() error {
 	if independent.config == nil {
 		return fmt.Errorf("independent.config is nill")
 	}
-	m, err := manager.New(independent.ctx, independent.config.Manager)
+	m, err := manager.New(independent.ctx, independent.blocker, independent.config.Manager)
 	if err != nil {
 		return fmt.Errorf("manager.New: %w", err)
 	}
@@ -515,7 +518,7 @@ func (independent *Service) startHandler(handler base.Interface) error {
 // Start the service.
 //
 // Requires at least one handler.
-func (independent *Service) Start() error {
+func (independent *Service) Start() (*sync.WaitGroup, error) {
 	var err error
 	var startedHandlers []string
 
@@ -591,7 +594,13 @@ errOccurred:
 			}
 		}
 	}
-	return err
+
+	if err == nil {
+		independent.blocker = &sync.WaitGroup{}
+		independent.blocker.Add(1)
+	}
+
+	return independent.blocker, err
 }
 
 //

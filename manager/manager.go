@@ -13,6 +13,7 @@ import (
 	"github.com/ahmetson/handler-lib/manager_client"
 	syncReplier "github.com/ahmetson/handler-lib/sync_replier"
 	"github.com/ahmetson/log-lib"
+	"sync"
 )
 
 // The Manager keeps all necessary parameters of the service.
@@ -23,12 +24,13 @@ type Manager struct {
 	handlerClients []manager_client.Interface
 	deps           []*clientConfig.Client
 	ctx            context.Interface
+	blocker        *sync.WaitGroup // block the service
 	running        bool
 }
 
 // New service with the parameters.
 // Parameter order: id, url, context type
-func New(ctx context.Interface, client *clientConfig.Client) (*Manager, error) {
+func New(ctx context.Interface, blocker *sync.WaitGroup, client *clientConfig.Client) (*Manager, error) {
 	handler := syncReplier.New()
 
 	h := &Manager{
@@ -37,6 +39,7 @@ func New(ctx context.Interface, client *clientConfig.Client) (*Manager, error) {
 		serviceUrl:     client.ServiceUrl,
 		handlerClients: make([]manager_client.Interface, 0),
 		deps:           make([]*clientConfig.Client, 0),
+		blocker:        blocker,
 	}
 
 	managerConfig := h.Config(client)
@@ -90,6 +93,9 @@ func (m *Manager) Close() error {
 	}
 
 	m.running = false
+	if m.blocker != nil {
+		m.blocker.Done()
+	}
 
 	return nil
 }
