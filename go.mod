@@ -8,7 +8,7 @@ require (
 	github.com/ahmetson/config-lib v0.0.0-20230908094846-24b233553470
 	github.com/ahmetson/dev-lib v0.0.0-20230908073741-33d7893d546a
 	github.com/ahmetson/handler-lib v0.0.0-20230908055435-ceab4155ee16
-	github.com/ahmetson/log-lib v0.0.0-20230814152407-68a090e4a798
+	github.com/ahmetson/log-lib v0.0.0-20230908112453-62afbc558b65
 	github.com/ahmetson/os-lib v0.0.0-20230908110839-83535270d872
 	github.com/stretchr/testify v1.8.4
 )
