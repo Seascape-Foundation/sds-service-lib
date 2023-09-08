@@ -501,7 +501,7 @@ func (independent *Service) setHandlerClient(c base.Interface) error {
 // startHandler sets the log into the handler which is prepared already.
 // then, starts it.
 func (independent *Service) startHandler(handler base.Interface) error {
-	if err := handler.SetLogger(independent.Logger.Child(handler.Config().Id)); err != nil {
+	if err := handler.SetLogger(independent.Logger); err != nil {
 		return fmt.Errorf("handler(id: '%s').SetLogger: %w", handler.Config().Id, err)
 	}
 

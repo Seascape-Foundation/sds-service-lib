@@ -6,6 +6,7 @@ import (
 	clientConfig "github.com/ahmetson/client-lib/config"
 	"github.com/ahmetson/common-lib/data_type/key_value"
 	"github.com/ahmetson/common-lib/message"
+	serviceConfig "github.com/ahmetson/config-lib/service"
 	context "github.com/ahmetson/dev-lib"
 	"github.com/ahmetson/handler-lib/base"
 	handlerConfig "github.com/ahmetson/handler-lib/config"
@@ -19,7 +20,6 @@ type Manager struct {
 	serviceUrl     string
 	handler        base.Interface // manage this service from other parts. it should be called before the orchestra runs
 	handlerManager manager_client.Interface
-	logger         *log.Logger
 	handlerClients []manager_client.Interface
 	deps           []*clientConfig.Client
 	ctx            context.Interface
@@ -35,7 +35,6 @@ func New(ctx context.Interface, client *clientConfig.Client) (*Manager, error) {
 		ctx:            ctx,
 		handler:        handler,
 		serviceUrl:     client.ServiceUrl,
-		logger:         nil,
 		handlerClients: make([]manager_client.Interface, 0),
 		deps:           make([]*clientConfig.Client, 0),
 	}
@@ -62,7 +61,7 @@ func New(ctx context.Interface, client *clientConfig.Client) (*Manager, error) {
 //
 // It closes this manager.
 //
-// todo It doesn't close the proxies, which it must close.
+// Todo It doesn't close the proxies, which it must close.
 func (m *Manager) Close() error {
 	// closing all handlers
 	for _, client := range m.handlerClients {
@@ -101,14 +100,10 @@ func (m *Manager) Running() bool {
 
 // onClose received a close signal for this service
 func (m *Manager) onClose(req message.Request) message.Reply {
-	m.logger.Info("service received a signal to close", "service url", m.serviceUrl)
-
 	err := m.Close()
 	if err != nil {
 		return req.Fail(fmt.Sprintf("manager.Close: %v", err))
 	}
-
-	m.logger.Info("service closed", "service url", m.serviceUrl)
 
 	return req.Ok(key_value.Empty())
 }
@@ -122,7 +117,7 @@ func (m *Manager) onHeartbeat(req message.Request) message.Reply {
 func (m *Manager) Config(client *clientConfig.Client) *handlerConfig.Handler {
 	return &handlerConfig.Handler{
 		Type:           handlerConfig.SyncReplierType,
-		Category:       "service",
+		Category:       serviceConfig.ManagerCategory,
 		InstanceAmount: 1,
 		Port:           client.Port,
 		Id:             client.Id,
@@ -130,10 +125,7 @@ func (m *Manager) Config(client *clientConfig.Client) *handlerConfig.Handler {
 }
 
 func (m *Manager) SetLogger(parent *log.Logger) error {
-	logger := parent.Child("manager")
-	m.logger = logger
-
-	if err := m.handler.SetLogger(logger); err != nil {
+	if err := m.handler.SetLogger(parent); err != nil {
 		return fmt.Errorf("handler.SetLogger: %w", err)
 	}
 
@@ -151,12 +143,7 @@ func (m *Manager) SetDeps(configs []*clientConfig.Client) {
 // Start the orchestra in the background.
 // If it failed to run, then return an error.
 // The url request is the main service to which this orchestra belongs too.
-//
-// The logger is the handler logger as it is. The orchestra will create its own logger from it.
 func (m *Manager) Start() error {
-	if m.logger == nil {
-		return fmt.Errorf("logger not set. call SetLogger first")
-	}
 	if err := m.handler.Route("close", m.onClose); err != nil {
 		return fmt.Errorf(`handler.Route("close"): %w`, err)
 	}
