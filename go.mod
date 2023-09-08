@@ -3,13 +3,13 @@ module github.com/ahmetson/service-lib
 go 1.19
 
 require (
-	github.com/ahmetson/client-lib v0.0.0-20230908063005-a2ac06918e8c
+	github.com/ahmetson/client-lib v0.0.0-20230908110757-5f62078bd7bd
 	github.com/ahmetson/common-lib v0.0.0-20230825195825-e7b69549b9a1
 	github.com/ahmetson/config-lib v0.0.0-20230908094846-24b233553470
 	github.com/ahmetson/dev-lib v0.0.0-20230908073741-33d7893d546a
 	github.com/ahmetson/handler-lib v0.0.0-20230908055435-ceab4155ee16
 	github.com/ahmetson/log-lib v0.0.0-20230814152407-68a090e4a798
-	github.com/ahmetson/os-lib v0.0.0-20230902092125-71ae94a18268
+	github.com/ahmetson/os-lib v0.0.0-20230908110839-83535270d872
 	github.com/stretchr/testify v1.8.4
 )
 

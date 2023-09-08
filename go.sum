@@ -52,6 +52,8 @@ github.com/acomagu/bufpipe v1.0.4 h1:e3H4WUzM3npvo5uv95QuJM3cQspFNtFBzvJ2oNjKIDQ
 github.com/acomagu/bufpipe v1.0.4/go.mod h1:mxdxdup/WdsKVreO5GpW4+M/1CE2sMG4jeGJ2sYmHc4=
 github.com/ahmetson/client-lib v0.0.0-20230908063005-a2ac06918e8c h1:xRpRremTHmu8eZQ4lf0eVxo9Z7tq1i7S+NpH+CVFHNM=
 github.com/ahmetson/client-lib v0.0.0-20230908063005-a2ac06918e8c/go.mod h1:6ZWXLalUMtQKF+BX0ARh/LUNEKpfysW7eXUBoentdQc=
+github.com/ahmetson/client-lib v0.0.0-20230908110757-5f62078bd7bd h1:gUS+DJF7js8sBaRWmG3NCeWj7YGqEx9dBtBLXazqDmw=
+github.com/ahmetson/client-lib v0.0.0-20230908110757-5f62078bd7bd/go.mod h1:EfibUQmfzlHjDsUkBjsjLQ9Bof3i1H54Knv038BgqTA=
 github.com/ahmetson/common-lib v0.0.0-20230825195825-e7b69549b9a1 h1:kcw97M9jxESS9hULBxd/c3Q60VvwYXxxg9wLStINt4g=
 github.com/ahmetson/common-lib v0.0.0-20230825195825-e7b69549b9a1/go.mod h1:33pBXMtRGX5Xseh5t9t9xfo8jaeHNkE3yYyNRdXoY3Y=
 github.com/ahmetson/config-lib v0.0.0-20230908094846-24b233553470 h1:bb6YRIIxdDMuRVZrqxzPtpxBOcr9NsZMBg+VP7/pMVk=
@@ -64,6 +66,8 @@ github.com/ahmetson/log-lib v0.0.0-20230814152407-68a090e4a798 h1:bjTtUJEIqC2dft
 github.com/ahmetson/log-lib v0.0.0-20230814152407-68a090e4a798/go.mod h1:rbV4Rg87WbAPdLWeBQkteUBNsMAyMjWYwPfUyfYL9FQ=
 github.com/ahmetson/os-lib v0.0.0-20230902092125-71ae94a18268 h1:ru0ibxo2jHtd7Ld0AZmx4cScLwsJBWrxWlZw37tu7kk=
 github.com/ahmetson/os-lib v0.0.0-20230902092125-71ae94a18268/go.mod h1:S9yVFAmdTRTrEhMJNF1fogooNkVFFAuMJEFXXJE/hXw=
+github.com/ahmetson/os-lib v0.0.0-20230908110839-83535270d872 h1:DYkS+HSvi8pcZASUOrmPI91x9OgekF4yJLrkBqKyBOM=
+github.com/ahmetson/os-lib v0.0.0-20230908110839-83535270d872/go.mod h1:2Oz7/OCwFcakHOe6qxSwlAbfF1Mt1AMUaW9iTyKhoq4=
 github.com/anmitsu/go-shlex v0.0.0-20200514113438-38f4b401e2be h1:9AeTilPcZAjCFIImctFaOjnTIavg87rW78vTPkQqLI8=
 github.com/armon/go-socks5 v0.0.0-20160902184237-e75332964ef5 h1:0CwZNZbxp69SHPdPJAN/hZIm0C4OItdklCFmMRWYpio=
 github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2 h1:DklsrG3dyBCFEj5IhUbnKptjxatkF07cF2ak3yi77so=
