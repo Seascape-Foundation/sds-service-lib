@@ -364,6 +364,7 @@ func (independent *Service) generateConfig() (*serviceConfig.Service, error) {
 	if err != nil {
 		return nil, fmt.Errorf("configClient.GenerateService('%s', '%s', '%s'): %w", independent.id, independent.url, independent.Type, err)
 	}
+	generatedConfig.Manager.UrlFunc(clientConfig.Url)
 
 	// Get all handlers and add them into the service
 	for category, raw := range independent.Handlers {
@@ -397,6 +398,7 @@ func (independent *Service) lintConfig() error {
 	if err != nil {
 		return fmt.Errorf("configClient.Service('%s', '%s', '%s'): %w", independent.id, independent.url, independent.Type, err)
 	}
+	returnedService.Manager.UrlFunc(clientConfig.Url)
 
 	if returnedService.Url != independent.url {
 		independent.url = returnedService.Url
