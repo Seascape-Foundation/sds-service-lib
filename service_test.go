@@ -15,6 +15,7 @@ import (
 	"github.com/ahmetson/os-lib/path"
 	"github.com/ahmetson/service-lib/config"
 	"github.com/stretchr/testify/suite"
+	"gopkg.in/yaml.v3"
 	win "os"
 	"path/filepath"
 	"testing"
@@ -34,6 +35,39 @@ type TestServiceSuite struct {
 	envPath    string
 	handler    base.Interface
 	logger     *log.Logger
+}
+
+func (test *TestServiceSuite) createYaml(dir string, name string) {
+	s := test.Require
+
+	kv := key_value.New().Set("services", []interface{}{})
+
+	serviceConfig, err := yaml.Marshal(kv.Map())
+	s().NoError(err)
+
+	filePath := filepath.Join(dir, name+".yml")
+
+	f, err := win.OpenFile(filePath, win.O_RDWR|win.O_CREATE|win.O_TRUNC, 0644)
+	s().NoError(err)
+	_, err = f.Write(serviceConfig)
+	s().NoError(err)
+
+	s().NoError(f.Close())
+}
+
+func (test *TestServiceSuite) deleteYaml(dir string, name string) {
+	s := test.Require
+
+	filePath := filepath.Join(dir, name+".yml")
+
+	exist, err := path.FileExist(filePath)
+	s().NoError(err)
+
+	if !exist {
+		return
+	}
+
+	s().NoError(win.Remove(filePath))
 }
 
 func (test *TestServiceSuite) SetupTest() {
@@ -68,23 +102,27 @@ func (test *TestServiceSuite) SetupTest() {
 	s().NoError(err)
 }
 
-func (test *TestServiceSuite) TearDownTest() {
+func (test *TestServiceSuite) closeService() {
 	s := test.Suite.Require
-
-	err := win.Remove(test.envPath)
-	test.Require().NoError(err, "delete the dump file: "+test.envPath)
-
-	// newService sets the test.service
 	if test.service != nil {
 		s().NoError(test.service.ctx.Close())
 
 		test.service = nil
 
 		win.Args = win.Args[:len(win.Args)-2]
+
+		// Wait a bit for closing the threads
+		time.Sleep(time.Second)
 	}
 
-	// Wait a bit for closing the threads
-	time.Sleep(time.Millisecond * 100)
+	test.deleteYaml(test.currentDir, "app")
+}
+
+func (test *TestServiceSuite) TearDownTest() {
+	s := test.Suite.Require
+
+	err := win.Remove(test.envPath)
+	s().NoError(err, "delete the dump file: "+test.envPath)
 }
 
 func (test *TestServiceSuite) newService() {
@@ -119,12 +157,12 @@ func (test *TestServiceSuite) externalClient(hConfig *handlerConfig.Handler) *cl
 func (test *TestServiceSuite) managerClient() *client.Socket {
 	s := test.Suite.Require
 
-	externalConfig := test.service.config.Manager
-	externalConfig.UrlFunc(clientConfig.Url)
-	externalClient, err := client.New(externalConfig)
+	managerConfig := test.service.config.Manager
+	managerConfig.UrlFunc(clientConfig.Url)
+	managerClient, err := client.New(managerConfig)
 	s().NoError(err)
 
-	return externalClient
+	return managerClient
 }
 
 // Test_10_New new service by flag or environment variable
@@ -149,8 +187,6 @@ func (test *TestServiceSuite) Test_10_New() {
 
 	// Clean out the os args
 	win.Args = win.Args[:len(win.Args)-2]
-
-	test.logger.Info("close the already running context....")
 
 	// remove the created service.
 	// to re-create the service, we must close the context.
@@ -185,6 +221,8 @@ func (test *TestServiceSuite) Test_11_generateConfig() {
 
 	_, err := test.service.generateConfig()
 	s().NoError(err)
+
+	test.closeService()
 }
 
 // Test_12_lintConfig loads the configuration of the service and sets it
@@ -197,6 +235,8 @@ func (test *TestServiceSuite) Test_12_lintConfig() {
 	s().NoError(err)
 
 	s().NoError(test.service.lintConfig())
+
+	test.closeService()
 }
 
 // Test_13_prepareConfig is calling lint config since the configuration exists in the context.
@@ -213,6 +253,8 @@ func (test *TestServiceSuite) Test_13_prepareConfig() {
 
 	// Config must be set
 	s().NotNil(test.service.config)
+
+	test.closeService()
 }
 
 // Test_14_manager tests the creation of the manager and linting it with the handler.
@@ -227,6 +269,8 @@ func (test *TestServiceSuite) Test_14_manager() {
 	handler := test.service.Handlers["main"].(base.Interface)
 	err := test.service.setHandlerClient(handler)
 	s().NoError(err)
+
+	test.closeService()
 }
 
 // Test_15_handler tests setup and start of the handler
@@ -261,6 +305,8 @@ func (test *TestServiceSuite) Test_15_handler() {
 	s().NoError(err)
 	s().NoError(handlerManager.Close())
 	s().NoError(externalClient.Close())
+
+	test.closeService()
 }
 
 // Test_16_managerRequest tests the start of the manager and closing it by a command
@@ -304,6 +350,7 @@ func (test *TestServiceSuite) Test_16_managerRequest() {
 
 	// clean out
 	test.service = nil
+	win.Args = win.Args[:len(win.Args)-2]
 }
 
 // Test_17_Start test service start.
@@ -351,6 +398,7 @@ func (test *TestServiceSuite) Test_17_Start() {
 
 	// since we closed by manager, the cleaning-out by test suite not necessary.
 	test.service = nil
+	win.Args = win.Args[:len(win.Args)-2]
 }
 
 // In order for 'go test' to run this suite, we need to create
