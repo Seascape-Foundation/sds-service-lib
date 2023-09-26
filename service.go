@@ -94,11 +94,8 @@ func New() (*Service, error) {
 	independent.Logger = logger
 
 	if len(id) == 0 {
-		logger.Info("id is empty, let's fetch it from the configuration...")
 		configClient := ctx.Config()
 		id, err = configClient.String(config.IdEnv)
-		logger.Info("configClient.String", "parameter", config.IdEnv, "id", id, "error", err)
-		logger.Info("environment file", "path", os.Args[len(os.Args)-1])
 		if err != nil {
 			err = fmt.Errorf("configClient.String('%s'): %w", config.IdEnv, err)
 			if closeErr := ctx.Close(); closeErr != nil {
