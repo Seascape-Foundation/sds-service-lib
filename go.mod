@@ -11,6 +11,7 @@ require (
 	github.com/ahmetson/log-lib v0.0.0-20230908112453-62afbc558b65
 	github.com/ahmetson/os-lib v0.0.0-20230908110839-83535270d872
 	github.com/stretchr/testify v1.8.4
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
@@ -21,7 +22,6 @@ require (
 	github.com/charmbracelet/log v0.2.4 // indirect
 	github.com/cloudflare/circl v1.3.3 // indirect
 	github.com/emirpasic/gods v1.18.1 // indirect
-	github.com/ethereum/go-ethereum v1.12.2 // indirect
 	github.com/fsnotify/fsnotify v1.6.0 // indirect
 	github.com/go-git/gcfg v1.5.1-0.20230307220236-3a3c6141e376 // indirect
 	github.com/go-git/go-billy/v5 v5.4.1 // indirect
@@ -64,11 +64,8 @@ require (
 	dario.cat/mergo v1.0.0 // indirect
 	github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2 // indirect
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
-	github.com/btcsuite/btcd/btcec/v2 v2.3.2 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.2.0 // indirect
 	github.com/go-git/go-git/v5 v5.8.1 // indirect
-	github.com/holiman/uint256 v1.2.3 // indirect
 	github.com/joho/godotenv v1.5.1 // indirect
 	github.com/pebbe/zmq4 v1.2.10 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
@@ -77,5 +74,4 @@ require (
 	golang.org/x/sys v0.12.0 // indirect
 	golang.org/x/text v0.13.0 // indirect
 	golang.org/x/tools v0.13.0 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
