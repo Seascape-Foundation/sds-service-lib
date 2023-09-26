@@ -170,7 +170,7 @@ func (independent *Service) RequireProxy(url string) {
 
 // RequireExtension lints the id to the extension url
 func (independent *Service) RequireExtension(id string, url string) {
-	if err := independent.RequiredExtensions.Exist(id); err == nil {
+	if independent.RequiredExtensions.Exist(id) {
 		independent.RequiredExtensions.Set(id, url)
 	}
 }
