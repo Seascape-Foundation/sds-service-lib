@@ -93,7 +93,7 @@ func (m *Manager) Close() error {
 	}
 
 	m.running = false
-	if m.blocker != nil {
+	if m.blocker != nil && *m.blocker != nil {
 		fmt.Printf("blocker done!\n")
 		(*m.blocker).Done()
 	} else {
