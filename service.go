@@ -9,9 +9,10 @@ package service
 
 import (
 	"fmt"
+	clientConfig "github.com/ahmetson/client-lib/config"
 	"github.com/ahmetson/common-lib/data_type/key_value"
 	serviceConfig "github.com/ahmetson/config-lib/service"
-	"github.com/ahmetson/dev-lib"
+	context "github.com/ahmetson/dev-lib"
 	"github.com/ahmetson/handler-lib/base"
 	handlerConfig "github.com/ahmetson/handler-lib/config"
 	"github.com/ahmetson/handler-lib/manager_client"
@@ -19,8 +20,6 @@ import (
 	"github.com/ahmetson/os-lib/arg"
 	"github.com/ahmetson/service-lib/config"
 	"github.com/ahmetson/service-lib/manager"
-	"os"
-	"slices"
 	"sync"
 )
 
@@ -29,7 +28,8 @@ type Service struct {
 	config             *serviceConfig.Service
 	ctx                context.Interface // context handles the configuration and dependencies
 	Handlers           key_value.KeyValue
-	RequiredProxies    []string // url => orchestra type
+	proxies            []*serviceConfig.Proxy
+	proxyChains        []*serviceConfig.ProxyChain
 	RequiredExtensions key_value.KeyValue
 	Logger             *log.Logger
 	Type               serviceConfig.Type
@@ -72,13 +72,14 @@ func New() (*Service, error) {
 	}
 
 	independent := &Service{
-		ctx:             ctx,
-		Handlers:        key_value.Empty(),
-		RequiredProxies: []string{},
-		url:             url,
-		id:              id,
-		Type:            serviceConfig.IndependentType,
-		blocker:         nil,
+		ctx:         ctx,
+		Handlers:    key_value.New(),
+		proxies:     make([]*serviceConfig.Proxy, 0),
+		proxyChains: make([]*serviceConfig.ProxyChain, 0),
+		url:         url,
+		id:          id,
+		Type:        serviceConfig.IndependentType,
+		blocker:     nil,
 	}
 
 	logger, err := log.New(id, true)
@@ -160,12 +161,28 @@ func (independent *Service) Id() string {
 	return independent.id
 }
 
-// RequireProxy adds a proxy that's needed for this service to run.
+// SetProxy adds a proxy that's needed for this service to run.
 // Service has to have a pipeline.
-func (independent *Service) RequireProxy(url string) {
-	if !independent.IsProxyRequired(url) {
-		independent.RequiredProxies = append(independent.RequiredProxies, url)
+func (independent *Service) SetProxy(proxy *serviceConfig.Proxy) {
+	if !serviceConfig.IsProxySet(independent.proxies, proxy.Id) {
+		independent.proxies = append(independent.proxies, proxy)
 	}
+}
+
+// SetProxyChain sets a chain of proxy for a given endpoint.
+// If the proxy chain exists, then it will be overwritten.
+func (independent *Service) SetProxyChain(endpoint *serviceConfig.Endpoint, proxies ...*serviceConfig.Proxy) error {
+	if len(proxies) == 0 {
+		return fmt.Errorf("no proxies were given as a chain")
+	}
+	proxyChain := &serviceConfig.ProxyChain{
+		Endpoint: endpoint,
+		Proxies:  proxies,
+	}
+
+	independent.proxyChains = append(independent.proxyChains, proxyChain)
+
+	return nil
 }
 
 // RequireExtension lints the id to the extension url
@@ -175,15 +192,11 @@ func (independent *Service) RequireExtension(id string, url string) {
 	}
 }
 
-func (independent *Service) IsProxyRequired(proxyUrl string) bool {
-	return slices.Contains(independent.RequiredProxies, proxyUrl)
-}
-
 // A Pipeline creates a chain of the proxies.
 //func (independent *Service) Pipeline(pipeEnd *pipeline.PipeEnd, proxyUrls ...string) error {
 //	pipelines := independent.pipelines
 //	controllers := independent.Handlers
-//	proxies := independent.RequiredProxies
+//	proxies := independent.proxies
 //	createdPipeline := pipeEnd.Pipeline(proxyUrls)
 //
 //	if err := pipeline.PrepareAddingPipeline(pipelines, proxies, controllers, createdPipeline); err != nil {
@@ -236,8 +249,8 @@ func (independent *Service) RunManager() error {
 	//
 	// prepare proxies configurations
 	//--------------------------------------------------
-	if len(independent.RequiredProxies) > 0 {
-		//for _, requiredProxy := range independent.RequiredProxies {
+	if len(independent.proxies) > 0 {
+		//for _, requiredProxy := range independent.proxies {
 		//var dep *dev.Dep
 
 		//dep, err = independent.ctx.New(requiredProxy)
@@ -317,8 +330,8 @@ func (independent *Service) RunManager() error {
 	}
 
 	// run proxies if they are needed.
-	if len(independent.RequiredProxies) > 0 {
-		//for _, requiredProxy := range independent.RequiredProxies {
+	if len(independent.proxies) > 0 {
+		//for _, requiredProxy := range independent.proxies {
 		// We don't check for the error, since preparing the config should do that already.
 		//dep, _ := independent.Context.Dep(requiredProxy)
 		//
