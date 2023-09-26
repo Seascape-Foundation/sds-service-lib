@@ -108,18 +108,18 @@ func (m *Manager) Running() bool {
 }
 
 // onClose received a close signal for this service
-func (m *Manager) onClose(req message.Request) message.Reply {
+func (m *Manager) onClose(req message.RequestInterface) message.ReplyInterface {
 	err := m.Close()
 	if err != nil {
 		return req.Fail(fmt.Sprintf("manager.Close: %v", err))
 	}
 
-	return req.Ok(key_value.Empty())
+	return req.Ok(key_value.New())
 }
 
 // onHeartbeat simple handler to check that service is alive
-func (m *Manager) onHeartbeat(req message.Request) message.Reply {
-	return req.Ok(key_value.Empty())
+func (m *Manager) onHeartbeat(req message.RequestInterface) message.ReplyInterface {
+	return req.Ok(key_value.New())
 }
 
 // Config of the manager

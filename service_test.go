@@ -36,8 +36,6 @@ type TestServiceSuite struct {
 	logger     *log.Logger
 }
 
-// Make sure that Account is set to five
-// before each test
 func (test *TestServiceSuite) SetupTest() {
 	s := test.Suite.Require
 
@@ -60,8 +58,8 @@ func (test *TestServiceSuite) SetupTest() {
 
 	// handler
 	syncReplier := sync_replier.New()
-	onHello := func(req message.Request) message.Reply {
-		return req.Ok(key_value.Empty())
+	onHello := func(req message.RequestInterface) message.ReplyInterface {
+		return req.Ok(key_value.New())
 	}
 	s().NoError(syncReplier.Route("hello", onHello))
 	test.handler = syncReplier
@@ -252,7 +250,7 @@ func (test *TestServiceSuite) Test_15_handler() {
 	// request the handler
 	req := message.Request{
 		Command:    "hello",
-		Parameters: key_value.Empty(),
+		Parameters: key_value.New(),
 	}
 	reply, err := externalClient.Request(&req)
 	s().NoError(err)
@@ -293,7 +291,7 @@ func (test *TestServiceSuite) Test_16_managerRequest() {
 
 	req := message.Request{
 		Command:    "close",
-		Parameters: key_value.Empty(),
+		Parameters: key_value.New(),
 	}
 	err = externalClient.Submit(&req)
 	s().NoError(err)
@@ -329,7 +327,7 @@ func (test *TestServiceSuite) Test_17_Start() {
 	// Make sure that handlers are running
 	req := message.Request{
 		Command:    "hello",
-		Parameters: key_value.Empty(),
+		Parameters: key_value.New(),
 	}
 	reply, err := externalClient.Request(&req)
 	s().NoError(err)
@@ -339,7 +337,7 @@ func (test *TestServiceSuite) Test_17_Start() {
 	managerClient := test.managerClient()
 	req = message.Request{
 		Command:    "heartbeat",
-		Parameters: key_value.Empty(),
+		Parameters: key_value.New(),
 	}
 	reply, err = managerClient.Request(&req)
 	s().NoError(err)
