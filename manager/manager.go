@@ -4,9 +4,9 @@ package manager
 import (
 	"fmt"
 	clientConfig "github.com/ahmetson/client-lib/config"
-	"github.com/ahmetson/common-lib/data_type/key_value"
-	"github.com/ahmetson/common-lib/message"
 	serviceConfig "github.com/ahmetson/config-lib/service"
+	"github.com/ahmetson/datatype-lib/data_type/key_value"
+	"github.com/ahmetson/datatype-lib/message"
 	context "github.com/ahmetson/dev-lib"
 	"github.com/ahmetson/handler-lib/base"
 	handlerConfig "github.com/ahmetson/handler-lib/config"

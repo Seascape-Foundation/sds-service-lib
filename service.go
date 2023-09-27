@@ -10,8 +10,8 @@ package service
 import (
 	"fmt"
 	clientConfig "github.com/ahmetson/client-lib/config"
-	"github.com/ahmetson/common-lib/data_type/key_value"
 	serviceConfig "github.com/ahmetson/config-lib/service"
+	"github.com/ahmetson/datatype-lib/data_type/key_value"
 	context "github.com/ahmetson/dev-lib"
 	"github.com/ahmetson/handler-lib/base"
 	handlerConfig "github.com/ahmetson/handler-lib/config"

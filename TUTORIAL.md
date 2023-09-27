@@ -7,8 +7,8 @@ package service
 
 import (
 	"github.com/ahmetson/client-lib"
-	"github.com/ahmetson/common-lib/data_type/key_value"
-	"github.com/ahmetson/common-lib/message"
+	"github.com/ahmetson/datatype-lib/data_type/key_value"
+	"github.com/ahmetson/datatype-lib/message"
 	"github.com/ahmetson/dev-lib/base/config"
 	"github.com/ahmetson/handler-lib/replier"
 	"github.com/ahmetson/service-lib"
@@ -57,7 +57,7 @@ package service
 import (
 	"fmt"
 	"github.com/ahmetson/client-lib"
-	"github.com/ahmetson/common-lib/message"
+	"github.com/ahmetson/datatype-lib/message"
 	"github.com/ahmetson/dev-lib/base/config"
 	"github.com/ahmetson/handler-lib/replier"
 	"github.com/ahmetson/service-lib"

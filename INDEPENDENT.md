@@ -14,7 +14,7 @@ Get the `service-lib` module and `common-lib` module:
 
 ```sh
 go get github.com/ahmetson/service-lib
-go get github.com/ahmetson/common-lib
+go get github.com/ahmetson/datatype-lib
 ```
 
 ## Internal process
@@ -122,8 +122,8 @@ Let's create it on `handler/handler.go`:
 package handler
 
 import (
-	"github.com/ahmetson/common-lib/data_type/key_value"
-	"github.com/ahmetson/common-lib/message"
+	"github.com/ahmetson/datatype-lib/data_type/key_value"
+	"github.com/ahmetson/datatype-lib/message"
 	"github.com/ahmetson/service-lib/controller"
 	"github.com/ahmetson/service-lib/communication/command"
 	"github.com/ahmetson/service-lib/configuration"
