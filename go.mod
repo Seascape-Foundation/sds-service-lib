@@ -2,7 +2,7 @@ module github.com/ahmetson/proxy-lib
 
 go 1.19
 
-replace github.com/ahmetson/common-lib => D:/sds/common-lib
+replace github.com/ahmetson/datatype-lib => D:/sds/datatype-lib
 
 replace github.com/ahmetson/os-lib => D:/sds/os-lib
 
@@ -18,7 +18,7 @@ replace github.com/ahmetson/service-lib => D:/sds/service-lib
 
 require (
 	github.com/ahmetson/client-lib v0.0.0-20230814161235-c87ba71fcc40
-	github.com/ahmetson/common-lib v0.0.0-20230717140750-5e95e61d69c2
+	github.com/ahmetson/datatype-lib v0.0.0-20230717140750-5e95e61d69c2
 	github.com/ahmetson/handler-lib v0.0.0-20230814162522-8e780da024d7
 	github.com/ahmetson/log-lib v0.0.0-20230814152407-68a090e4a798
 	github.com/ahmetson/service-lib v0.0.0-00010101000000-000000000000
