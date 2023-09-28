@@ -3,7 +3,7 @@ package proxy
 import (
 	"fmt"
 	client "github.com/ahmetson/client-lib"
-	"github.com/ahmetson/common-lib/message"
+	"github.com/ahmetson/datatype-lib/message"
 	"github.com/ahmetson/handler-lib"
 	"github.com/ahmetson/handler-lib/command"
 	"github.com/ahmetson/log-lib"
