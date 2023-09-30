@@ -192,23 +192,6 @@ func (independent *Service) RequireExtension(id string, url string) {
 	}
 }
 
-// A Pipeline creates a chain of the proxies.
-//func (independent *Service) Pipeline(pipeEnd *pipeline.PipeEnd, proxyUrls ...string) error {
-//	pipelines := independent.pipelines
-//	controllers := independent.Handlers
-//	proxies := independent.proxies
-//	createdPipeline := pipeEnd.Pipeline(proxyUrls)
-//
-//	if err := pipeline.PrepareAddingPipeline(pipelines, proxies, controllers, createdPipeline); err != nil {
-//		return fmt.Errorf("pipeline.PrepareAddingPipeline: %w", err)
-//	}
-//
-//	independent.pipelines = append(independent.pipelines, createdPipeline)
-//
-//	return nil
-//}
-
-// returns the extension urls
 func (independent *Service) requiredControllerExtensions() []string {
 	var extensions []string
 	for _, controllerInterface := range independent.Handlers {
@@ -218,28 +201,6 @@ func (independent *Service) requiredControllerExtensions() []string {
 
 	return extensions
 }
-
-// lintPipelineConfiguration checks that proxy url and controllerName are valid.
-// Then, in the config, it makes sure that dependency is linted.
-//func (independent *Service) preparePipelineConfigurations() error {
-//	servicePipeline := pipeline.FindServiceEnd(independent.pipelines)
-//
-//	if servicePipeline != nil {
-//		servicePipeline.End.Url = independent.config.Url
-//		independent.Logger.Info("dont forget to update the yaml with the controllerPipeline service end url")
-//		err := pipeline.LintToService(independent.Context, independent.config, servicePipeline)
-//		if err != nil {
-//			return fmt.Errorf("pipeline.LintToService: %w", err)
-//		}
-//	}
-//
-//	err := pipeline.LintToControllers(independent.Context, independent.config, independent.pipelines)
-//	if err != nil {
-//		return fmt.Errorf("pipeline.LintToControllers: %w", err)
-//	}
-//
-//	return nil
-//}
 
 // RunManager the services by validating, linting the configurations, as well as setting up the dependencies
 func (independent *Service) RunManager() error {
