@@ -161,10 +161,10 @@ func (independent *Service) Id() string {
 	return independent.id
 }
 
-// SetProxy adds a proxy that's needed for this service to run.
+// setProxy adds a proxy that's needed for this service to run.
 // Service has to have a pipeline.
-func (independent *Service) SetProxy(proxy *serviceConfig.Proxy) {
-	if !serviceConfig.IsProxySet(independent.proxies, proxy.Id) {
+func (independent *Service) setProxy(proxy *serviceConfig.Proxy) {
+	if !serviceConfig.IsProxyExist(independent.proxies, proxy.Id) {
 		independent.proxies = append(independent.proxies, proxy)
 	}
 }
