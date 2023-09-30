@@ -407,10 +407,10 @@ func (independent *Service) lintConfig() error {
 	return nil
 }
 
-// prepareConfig sets the configuration of this service and handlers.
+// prepareServiceConfig sets the configuration of this service and handlers.
 // if the configuration doesn't exist, generates the service and handler.
 // the returned configuration from the context is linted into service and handler.
-func (independent *Service) prepareConfig() error {
+func (independent *Service) prepareServiceConfig() error {
 	configClient := independent.ctx.Config()
 
 	// prepare the configuration
@@ -438,7 +438,7 @@ func (independent *Service) prepareConfig() error {
 
 // newManager creates a manager.Manager and assigns it to manager, otherwise manager is nil.
 //
-// The manager.Manager depends on config set by prepareConfig.
+// The manager.Manager depends on config set by prepareServiceConfig.
 //
 // The manager.Manager depends on Logger, set automatically.
 //
@@ -497,8 +497,8 @@ func (independent *Service) Start() (*sync.WaitGroup, error) {
 		goto errOccurred
 	}
 
-	if err = independent.prepareConfig(); err != nil {
-		err = fmt.Errorf("prepareConfig: %w", err)
+	if err = independent.prepareServiceConfig(); err != nil {
+		err = fmt.Errorf("prepareServiceConfig: %w", err)
 		goto errOccurred
 	}
 

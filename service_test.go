@@ -249,7 +249,7 @@ func (test *TestServiceSuite) Test_13_prepareConfig() {
 	s().Nil(test.service.config)
 
 	// It should call the test.service.lintConfig
-	s().NoError(test.service.prepareConfig())
+	s().NoError(test.service.prepareServiceConfig())
 
 	// Config must be set
 	s().NotNil(test.service.config)
@@ -262,7 +262,7 @@ func (test *TestServiceSuite) Test_14_manager() {
 	s := test.Suite.Require
 
 	test.newService()
-	s().NoError(test.service.prepareConfig())
+	s().NoError(test.service.prepareServiceConfig())
 
 	s().NoError(test.service.newManager())
 
@@ -278,7 +278,7 @@ func (test *TestServiceSuite) Test_15_handler() {
 	s := test.Suite.Require
 
 	test.newService()
-	s().NoError(test.service.prepareConfig())
+	s().NoError(test.service.prepareServiceConfig())
 
 	s().NoError(test.service.newManager())
 
@@ -314,7 +314,7 @@ func (test *TestServiceSuite) Test_16_managerRequest() {
 	s := test.Suite.Require
 
 	test.newService()
-	s().NoError(test.service.prepareConfig())
+	s().NoError(test.service.prepareServiceConfig())
 
 	s().NoError(test.service.newManager())
 
