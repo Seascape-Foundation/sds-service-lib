@@ -18,7 +18,7 @@ import (
 	"github.com/ahmetson/handler-lib/manager_client"
 	"github.com/ahmetson/log-lib"
 	"github.com/ahmetson/os-lib/arg"
-	"github.com/ahmetson/service-lib/config"
+	"github.com/ahmetson/service-lib/flag"
 	"github.com/ahmetson/service-lib/manager"
 	"sync"
 )
@@ -42,23 +42,23 @@ type Service struct {
 
 // New service.
 // Requires url and id.
-// The url and id could be passed as flag config.IdFlag, config.UrlFlag.
-// Or url and id could be passed as environment variable config.IdEnv, config.UrlEnv.
+// The url and id could be passed as flag flag.IdFlag, flag.UrlFlag.
+// Or url and id could be passed as environment variable flag.IdEnv, flag.UrlEnv.
 //
 // It will also create the context internally.
 // The created context is started.
-// By default, the service uses' config.DevContext.
-// It could be overwritten by a flag config.ContextFlag.
+// By default, the service uses' flag.DevContext.
+// It could be overwritten by a flag flag.ContextFlag.
 func New() (*Service, error) {
 	id := ""
 	url := ""
 
 	// let's validate the parameters of the service
-	if arg.FlagExist(config.IdFlag) {
-		id = arg.FlagValue(config.IdFlag)
+	if arg.FlagExist(flag.IdFlag) {
+		id = arg.FlagValue(flag.IdFlag)
 	}
-	if arg.FlagExist(config.UrlFlag) {
-		url = arg.FlagValue(config.UrlFlag)
+	if arg.FlagExist(flag.UrlFlag) {
+		url = arg.FlagValue(flag.UrlFlag)
 	}
 
 	// Start the context
@@ -96,9 +96,9 @@ func New() (*Service, error) {
 
 	if len(id) == 0 {
 		configClient := ctx.Config()
-		id, err = configClient.String(config.IdEnv)
+		id, err = configClient.String(flag.IdEnv)
 		if err != nil {
-			err = fmt.Errorf("configClient.String('%s'): %w", config.IdEnv, err)
+			err = fmt.Errorf("configClient.String('%s'): %w", flag.IdEnv, err)
 			if closeErr := ctx.Close(); closeErr != nil {
 				return nil, fmt.Errorf("%v: ctx.Close: %w", err, closeErr)
 			}
@@ -107,9 +107,9 @@ func New() (*Service, error) {
 	}
 	if len(url) == 0 {
 		configClient := ctx.Config()
-		url, err = configClient.String(config.UrlEnv)
+		url, err = configClient.String(flag.UrlEnv)
 		if err != nil {
-			err = fmt.Errorf("configClient.String('%s'): %w", config.UrlEnv, err)
+			err = fmt.Errorf("configClient.String('%s'): %w", flag.UrlEnv, err)
 			if closeErr := ctx.Close(); closeErr != nil {
 				return nil, fmt.Errorf("%v: ctx.Close: %w", err, closeErr)
 			}
@@ -118,19 +118,19 @@ func New() (*Service, error) {
 	}
 
 	parentId := ""
-	if arg.FlagExist(config.ParentFlag) {
-		parentId = arg.FlagValue(config.ParentFlag)
+	if arg.FlagExist(flag.ParentFlag) {
+		parentId = arg.FlagValue(flag.ParentFlag)
 	}
 
 	if len(id) == 0 {
-		err = fmt.Errorf("service can not identify itself. Either use %s flag or %s environment variable", config.IdFlag, config.IdEnv)
+		err = fmt.Errorf("service can not identify itself. Either use %s flag or %s environment variable", flag.IdFlag, flag.IdEnv)
 		if closeErr := ctx.Close(); closeErr != nil {
 			return nil, fmt.Errorf("%v: ctx.Close: %w", err, closeErr)
 		}
 		return nil, err
 	}
 	if len(url) == 0 {
-		err = fmt.Errorf("service can not identify it's class. Either use %s flag or %s environment variable", config.UrlFlag, config.UrlEnv)
+		err = fmt.Errorf("service can not identify it's class. Either use %s flag or %s environment variable", flag.UrlFlag, flag.UrlEnv)
 		if closeErr := ctx.Close(); closeErr != nil {
 			return nil, fmt.Errorf("%v: ctx.Close: %w", err, closeErr)
 		}

@@ -1,4 +1,4 @@
-package config
+package flag
 
 const (
 	IdFlag     = "id"

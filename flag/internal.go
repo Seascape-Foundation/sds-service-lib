@@ -1,4 +1,4 @@
-package config
+package flag
 
 import "github.com/ahmetson/handler-lib/config"
 

@@ -13,7 +13,7 @@ import (
 	"github.com/ahmetson/log-lib"
 	"github.com/ahmetson/os-lib/arg"
 	"github.com/ahmetson/os-lib/path"
-	"github.com/ahmetson/service-lib/config"
+	"github.com/ahmetson/service-lib/flag"
 	"github.com/stretchr/testify/suite"
 	"gopkg.in/yaml.v3"
 	win "os"
@@ -85,7 +85,7 @@ func (test *TestServiceSuite) SetupTest() {
 
 	file, err := win.Create(test.envPath)
 	s().NoError(err)
-	_, err = file.WriteString(fmt.Sprintf("%s=%s\n%s=%s\n", config.IdEnv, test.id, config.UrlEnv, test.url))
+	_, err = file.WriteString(fmt.Sprintf("%s=%s\n%s=%s\n", flag.IdEnv, test.id, flag.UrlEnv, test.url))
 	s().NoError(err, "failed to write the data into: "+test.envPath)
 	err = file.Close()
 	s().NoError(err, "delete the dump file: "+test.envPath)
@@ -128,7 +128,7 @@ func (test *TestServiceSuite) TearDownTest() {
 func (test *TestServiceSuite) newService() {
 	s := test.Suite.Require
 
-	win.Args = append(win.Args, arg.NewFlag(config.IdFlag, test.id), arg.NewFlag(config.UrlFlag, test.url))
+	win.Args = append(win.Args, arg.NewFlag(flag.IdFlag, test.id), arg.NewFlag(flag.UrlFlag, test.url))
 
 	created, err := New()
 	s().NoError(err)
@@ -178,8 +178,8 @@ func (test *TestServiceSuite) Test_10_New() {
 	time.Sleep(time.Millisecond * 100)
 
 	// Pass a flag
-	idFlag := arg.NewFlag(config.IdFlag, test.id)
-	urlFlag := arg.NewFlag(config.UrlFlag, test.url)
+	idFlag := arg.NewFlag(flag.IdFlag, test.id)
+	urlFlag := arg.NewFlag(flag.UrlFlag, test.url)
 	win.Args = append(win.Args, idFlag, urlFlag)
 
 	independent, err := New()
@@ -239,7 +239,7 @@ func (test *TestServiceSuite) Test_12_lintConfig() {
 	test.closeService()
 }
 
-// Test_13_prepareConfig is calling lint config since the configuration exists in the context.
+// Test_13_prepareConfig is calling lint flag since the configuration exists in the context.
 func (test *TestServiceSuite) Test_13_prepareConfig() {
 	s := test.Suite.Require
 
