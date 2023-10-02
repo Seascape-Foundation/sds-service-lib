@@ -34,11 +34,15 @@ type Service struct {
 	Type               serviceConfig.Type
 	id                 string
 	url                string
-	parentManager      *manager.Client // parent to work with
 	blocker            *sync.WaitGroup
 	manager            *manager.Manager // manage this service from other parts
 	proxyChains        []*serviceConfig.ProxyChain
 	proxyUnits         map[*serviceConfig.Rule][]*serviceConfig.Unit
+}
+
+type Auxiliary struct {
+	*Service
+	ParentManager *manager.Client // parent to work with
 }
 
 // New service.
@@ -115,28 +119,6 @@ func New() (*Service, error) {
 		}
 	}
 
-	var parentConfig clientConfig.Client
-	if arg.FlagExist(flag.ParentFlag) {
-		parentStr := arg.FlagValue(flag.ParentFlag)
-		parentKv, err := key_value.NewFromString(parentStr)
-		if err != nil {
-			err = fmt.Errorf("key_value.NewFromString('%s'): %w", flag.ParentFlag, err)
-			if closeErr := ctx.Close(); closeErr != nil {
-				return nil, fmt.Errorf("%v: ctx.Close: %w", err, closeErr)
-			}
-			return nil, err
-		}
-		err = parentKv.Interface(&parentConfig)
-		if err != nil {
-			err = fmt.Errorf("parentKv.Interface: %w", err)
-			if closeErr := ctx.Close(); closeErr != nil {
-				return nil, fmt.Errorf("%v: ctx.Close: %w", err, closeErr)
-			}
-			return nil, err
-		}
-		parentConfig.UrlFunc(clientConfig.Url)
-	}
-
 	if len(id) == 0 {
 		err = fmt.Errorf("service can not identify itself. Either use %s flag or %s environment variable", flag.IdFlag, flag.IdEnv)
 		if closeErr := ctx.Close(); closeErr != nil {
@@ -152,19 +134,51 @@ func New() (*Service, error) {
 		return nil, err
 	}
 
-	if len(parentConfig.Id) > 0 {
-		parent, err := manager.NewClient(&parentConfig)
-		if err != nil {
-			err = fmt.Errorf("manager.NewClient('parentConfig'): %w", err)
-			if closeErr := ctx.Close(); closeErr != nil {
-				return nil, fmt.Errorf("%v: ctx.Close: %w", err, closeErr)
-			}
-			return nil, err
-		}
-		independent.parentManager = parent
+	return independent, nil
+}
+
+// NewAuxiliary creates a service with the parent.
+func NewAuxiliary() (*Auxiliary, error) {
+	if !arg.FlagExist(flag.ParentFlag) {
+		return nil, fmt.Errorf("missing %s flag", arg.NewFlag(flag.ParentFlag))
 	}
 
-	return independent, nil
+	//
+	// Parent config in a raw string format
+	//
+	parentStr := arg.FlagValue(flag.ParentFlag)
+	parentKv, err := key_value.NewFromString(parentStr)
+	if err != nil {
+		return nil, fmt.Errorf("key_value.NewFromString('%s'): %w", flag.ParentFlag, err)
+	}
+
+	//
+	// Parent config
+	//
+	var parentConfig clientConfig.Client
+	err = parentKv.Interface(&parentConfig)
+	if err != nil {
+		return nil, fmt.Errorf("parentKv.Interface: %w", err)
+	}
+	if len(parentConfig.Id) == 0 {
+		return nil, fmt.Errorf("empty parent")
+	}
+	parentConfig.UrlFunc(clientConfig.Url)
+
+	//
+	// Parent client
+	//
+	parent, err := manager.NewClient(&parentConfig)
+	if err != nil {
+		return nil, fmt.Errorf("manager.NewClient('parentConfig'): %w", err)
+	}
+
+	independent, err := New()
+	if err != nil {
+		return nil, fmt.Errorf("new independent service: %w", err)
+	}
+
+	return &Auxiliary{Service: independent, ParentManager: parent}, nil
 }
 
 // SetHandler of category
