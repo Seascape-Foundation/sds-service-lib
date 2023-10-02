@@ -1,4 +1,49 @@
-> Edit it readme later.
+# Service
+*This is one of the core modules.*
+
+The *service* library allows creating of independent micro**services**.
+
+> We omit the **micro** prefix from now on.
+
+**The independent services are minimal stand-alone applications.**
+A developer defines the list of API routes and a function that's executed.
+
+The API routes are grouped into the [handlers](https://github.com/ahmetson/handler-lib).
+*The handler defines how the API is served to the external users.*
+
+The independent services are isolated from each other.
+They don't share a configuration nor the data that they are working on.
+
+## Application architecture
+
+The application consists of multiple services.
+
+The independent service is the core of the application.
+As it will keep the business logic.
+
+There are auxiliary services.
+
+The proxies that operate on a request before it's passed to a service.
+And extensions extending service possibility or do some side works.
+
+**One of the aims of SDS framework is to write self-orchestrating applications.**
+
+In the SDS framework, the services are organized in a parent-child relationship.
+The independent service acts as a root node. 
+The auxiliary services counted as the child nodes.
+
+That means the root node is responsible for spawning the children.
+
+It's done in the background by the framework, so developers don't have to worry about it.
+
+## Coarsely grained API
+
+When you define an API routes, you set them at the minimal level.
+But if the service is stored on another machine, then requesting data by minimal API will cause a delay.
+
+In the microservice architecture, the remote APIs must be coarsely grained to reduce the network hops.
+
+The extensions with *merge* flag can group the routes of the parent.
 
 # LifeCycle
 When a service runs, it prepares itself.
