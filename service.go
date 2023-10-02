@@ -213,11 +213,17 @@ func (independent *Service) SetProxyChain(params ...interface{}) error {
 	} else {
 		rule = requiredRule
 	}
+	if len(rule.Urls) == 0 {
+		rule.Urls = []string{independent.url}
+	}
 
 	proxyChain := &serviceConfig.ProxyChain{
 		Sources:     sources,
 		Proxies:     proxies,
 		Destination: rule,
+	}
+	if !proxyChain.IsValid() {
+		return fmt.Errorf("proxy chain not valid")
 	}
 
 	proxyClient := independent.ctx.ProxyClient()
