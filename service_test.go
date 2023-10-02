@@ -4,11 +4,13 @@ import (
 	"fmt"
 	"github.com/ahmetson/client-lib"
 	clientConfig "github.com/ahmetson/client-lib/config"
+	serviceConfig "github.com/ahmetson/config-lib/service"
 	"github.com/ahmetson/datatype-lib/data_type/key_value"
 	"github.com/ahmetson/datatype-lib/message"
 	"github.com/ahmetson/handler-lib/base"
 	handlerConfig "github.com/ahmetson/handler-lib/config"
 	"github.com/ahmetson/handler-lib/manager_client"
+	"github.com/ahmetson/handler-lib/route"
 	"github.com/ahmetson/handler-lib/sync_replier"
 	"github.com/ahmetson/log-lib"
 	"github.com/ahmetson/os-lib/arg"
@@ -35,6 +37,10 @@ type TestServiceSuite struct {
 	envPath    string
 	handler    base.Interface
 	logger     *log.Logger
+
+	defaultHandleFunc route.HandleFunc0
+	cmd1              string
+	handlerCategory   string
 }
 
 func (test *TestServiceSuite) createYaml(dir string, name string) {
@@ -42,14 +48,14 @@ func (test *TestServiceSuite) createYaml(dir string, name string) {
 
 	kv := key_value.New().Set("services", []interface{}{})
 
-	serviceConfig, err := yaml.Marshal(kv.Map())
+	marshalledConfig, err := yaml.Marshal(kv.Map())
 	s().NoError(err)
 
 	filePath := filepath.Join(dir, name+".yml")
 
 	f, err := win.OpenFile(filePath, win.O_RDWR|win.O_CREATE|win.O_TRUNC, 0644)
 	s().NoError(err)
-	_, err = f.Write(serviceConfig)
+	_, err = f.Write(marshalledConfig)
 	s().NoError(err)
 
 	s().NoError(f.Close())
@@ -92,14 +98,20 @@ func (test *TestServiceSuite) SetupTest() {
 
 	// handler
 	syncReplier := sync_replier.New()
-	onHello := func(req message.RequestInterface) message.ReplyInterface {
+	test.defaultHandleFunc = func(req message.RequestInterface) message.ReplyInterface {
 		return req.Ok(key_value.New())
 	}
-	s().NoError(syncReplier.Route("hello", onHello))
+	test.cmd1 = "hello"
+	s().NoError(syncReplier.Route(test.cmd1, test.defaultHandleFunc))
 	test.handler = syncReplier
 
 	test.logger, err = log.New("test", true)
 	s().NoError(err)
+
+	test.handlerCategory = "main"
+	inprocConfig := handlerConfig.NewInternalHandler(handlerConfig.SyncReplierType, test.handlerCategory)
+	test.handler.SetConfig(inprocConfig)
+	s().NoError(test.handler.SetLogger(test.logger))
 }
 
 func (test *TestServiceSuite) closeService() {
@@ -134,7 +146,7 @@ func (test *TestServiceSuite) newService() {
 	s().NoError(err)
 
 	test.service = created
-	test.service.SetHandler("main", test.handler)
+	test.service.SetHandler(test.handlerCategory, test.handler)
 }
 
 func (test *TestServiceSuite) mainHandler() base.Interface {
@@ -239,7 +251,7 @@ func (test *TestServiceSuite) Test_12_lintConfig() {
 	test.closeService()
 }
 
-// Test_13_prepareConfig is calling lint flag since the configuration exists in the context.
+// Test_13_prepareConfig is calling a lint flag since the configuration exists in the context.
 func (test *TestServiceSuite) Test_13_prepareConfig() {
 	s := test.Suite.Require
 
@@ -399,6 +411,141 @@ func (test *TestServiceSuite) Test_17_Start() {
 	// since we closed by manager, the cleaning-out by test suite not necessary.
 	test.service = nil
 	win.Args = win.Args[:len(win.Args)-2]
+}
+
+// Test_18_Service_unitsByRouteRule tests the counting units by route rule
+func (test *TestServiceSuite) Test_18_Service_unitsByRouteRule() {
+	s := test.Require
+
+	cmd2 := "cmd_2"
+	category2 := "category_2"
+
+	// the SetupTest adds "main" category handler with "hello" command
+	test.newService()
+	rule := serviceConfig.NewDestination(test.service.url, test.handlerCategory, test.cmd1)
+	units := test.service.unitsByRouteRule(rule)
+	s().Len(units, 1)
+
+	// if the rule has a command that doesn't exist in the service, it's skipped
+	rule.Commands = []string{test.cmd1, cmd2}
+	units = test.service.unitsByRouteRule(rule)
+	s().Len(units, 1)
+
+	// suppose the handler has both commands; then units must return both
+	err := test.handler.Route(cmd2, test.defaultHandleFunc)
+	s().NoError(err)
+	test.service.SetHandler(test.handlerCategory, test.handler)
+
+	units = test.service.unitsByRouteRule(rule)
+	s().Len(units, 2)
+
+	// let's say, we have two handlers, in this case search for commands in all categories
+	syncReplier := sync_replier.New()
+	s().NoError(syncReplier.Route(test.cmd1, test.defaultHandleFunc))
+	inprocConfig := handlerConfig.NewInternalHandler(handlerConfig.SyncReplierType, category2)
+	syncReplier.SetConfig(inprocConfig)
+	s().NoError(syncReplier.SetLogger(test.logger))
+	test.service.SetHandler(category2, syncReplier)
+	rule.Categories = []string{test.handlerCategory, category2}
+
+	units = test.service.unitsByRouteRule(rule)
+	s().Len(units, 3)
+
+	// clean out
+	test.closeService()
+}
+
+// Test_19_Service_unitsByHandlerRule tests the counting units by handler rule
+func (test *TestServiceSuite) Test_19_Service_unitsByHandlerRule() {
+	s := test.Require
+
+	cmd2 := "cmd_2"
+	category2 := "category_2"
+
+	// the SetupTest adds "main" category handler with "hello" command
+	test.newService()
+	rule := serviceConfig.NewDestination(test.service.url, test.handlerCategory, test.cmd1)
+	units := test.service.unitsByHandlerRule(rule)
+	s().Len(units, 1)
+
+	// if the rule has a command that doesn't exist in the service, it's skipped
+	rule.Commands = []string{test.cmd1, cmd2}
+	units = test.service.unitsByHandlerRule(rule)
+	s().Len(units, 1)
+
+	// The above code is identical too Handler Rule
+	rule = serviceConfig.NewHandlerDestination(test.service.url, test.handlerCategory)
+	units = test.service.unitsByHandlerRule(rule)
+	s().Len(units, 1)
+
+	// suppose the handler has both commands; then units must return both
+	err := test.handler.Route(cmd2, test.defaultHandleFunc)
+	s().NoError(err)
+	test.service.SetHandler(test.handlerCategory, test.handler)
+
+	units = test.service.unitsByHandlerRule(rule)
+	s().Len(units, 2)
+
+	// let's say; we have two handlers, in this case search for commands in all categories
+	syncReplier := sync_replier.New()
+	s().NoError(syncReplier.Route(test.cmd1, test.defaultHandleFunc))
+	inprocConfig := handlerConfig.NewInternalHandler(handlerConfig.SyncReplierType, category2)
+	syncReplier.SetConfig(inprocConfig)
+	s().NoError(syncReplier.SetLogger(test.logger))
+	test.service.SetHandler(category2, syncReplier)
+
+	rule = serviceConfig.NewHandlerDestination(test.service.url, []string{test.handlerCategory, category2})
+
+	units = test.service.unitsByHandlerRule(rule)
+	s().Len(units, 3)
+
+	// Excluding the command must not return them as a unit
+	rule.ExcludeCommands(test.cmd1)
+	units = test.service.unitsByHandlerRule(rule)
+	s().Len(units, 1) // the test.cmd1 exists in two handlers, cmd2 from first handler must be returned
+
+	rule.ExcludeCommands(cmd2)
+	units = test.service.unitsByHandlerRule(rule)
+	s().Len(units, 0) // all commands are excluded.
+
+	// clean out
+	test.closeService()
+}
+
+// Test_20_Service_unitsByServiceRule tests the counting units by service rule
+func (test *TestServiceSuite) Test_20_Service_unitsByServiceRule() {
+	s := test.Require
+
+	cmd2 := "cmd_2"
+	category2 := "category_2"
+
+	// the SetupTest adds "main" category handler with "hello" command
+	test.newService()
+	rule := serviceConfig.NewServiceDestination(test.service.url)
+	units := test.service.unitsByServiceRule(rule)
+	s().Len(units, 1)
+
+	// suppose the handler has both commands; then units must return both
+	err := test.handler.Route(cmd2, test.defaultHandleFunc)
+	s().NoError(err)
+	test.service.SetHandler(test.handlerCategory, test.handler)
+
+	units = test.service.unitsByServiceRule(rule)
+	s().Len(units, 2)
+
+	// let's say; we have two handlers, in this case search for commands in all categories
+	syncReplier := sync_replier.New()
+	s().NoError(syncReplier.Route(test.cmd1, test.defaultHandleFunc))
+	inprocConfig := handlerConfig.NewInternalHandler(handlerConfig.SyncReplierType, category2)
+	syncReplier.SetConfig(inprocConfig)
+	s().NoError(syncReplier.SetLogger(test.logger))
+	test.service.SetHandler(category2, syncReplier)
+
+	units = test.service.unitsByServiceRule(rule)
+	s().Len(units, 3)
+
+	// clean out
+	test.closeService()
 }
 
 // In order for 'go test' to run this suite, we need to create

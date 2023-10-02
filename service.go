@@ -499,7 +499,11 @@ func (independent *Service) prepareProxyChains() error {
 
 // unitsByRouteRule returns the list of units for the route rule
 func (independent *Service) unitsByRouteRule(rule *serviceConfig.Rule) []*serviceConfig.Unit {
-	units := make([]*serviceConfig.Unit, len(rule.Commands)*len(rule.Categories))
+	units := make([]*serviceConfig.Unit, 0, len(rule.Commands)*len(rule.Categories))
+
+	if len(independent.Handlers) == 0 {
+		return units
+	}
 
 	for _, raw := range independent.Handlers {
 		handlerInterface := raw.(base.Interface)
@@ -533,7 +537,7 @@ func (independent *Service) unitsByRouteRule(rule *serviceConfig.Rule) []*servic
 
 // unitsByHandlerRule returns the list of units for the handler rule
 func (independent *Service) unitsByHandlerRule(rule *serviceConfig.Rule) []*serviceConfig.Unit {
-	units := make([]*serviceConfig.Unit, len(rule.Categories))
+	units := make([]*serviceConfig.Unit, 0, len(rule.Categories))
 
 	for _, raw := range independent.Handlers {
 		handlerInterface := raw.(base.Interface)
@@ -565,7 +569,7 @@ func (independent *Service) unitsByHandlerRule(rule *serviceConfig.Rule) []*serv
 
 // unitsByServiceRule returns the list of units for the service rule
 func (independent *Service) unitsByServiceRule(rule *serviceConfig.Rule) []*serviceConfig.Unit {
-	units := make([]*serviceConfig.Unit, len(rule.Categories))
+	units := make([]*serviceConfig.Unit, 0, len(rule.Categories))
 
 	for _, raw := range independent.Handlers {
 		handlerInterface := raw.(base.Interface)
