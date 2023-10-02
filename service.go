@@ -29,7 +29,6 @@ type Service struct {
 	ctx                context.Interface // context handles the configuration and dependencies
 	Handlers           key_value.KeyValue
 	proxies            []*serviceConfig.Proxy
-	proxyChains        []*serviceConfig.ProxyChain
 	RequiredExtensions key_value.KeyValue
 	Logger             *log.Logger
 	Type               serviceConfig.Type
@@ -42,13 +41,10 @@ type Service struct {
 
 // New service.
 // Requires url and id.
-// The url and id could be passed as flag flag.IdFlag, flag.UrlFlag.
+// The url and id could be passed as flag.IdFlag, flag.UrlFlag.
 // Or url and id could be passed as environment variable flag.IdEnv, flag.UrlEnv.
 //
-// It will also create the context internally.
-// The created context is started.
-// By default, the service uses' flag.DevContext.
-// It could be overwritten by a flag flag.ContextFlag.
+// It will also create the context internally and start it.
 func New() (*Service, error) {
 	id := ""
 	url := ""
@@ -66,20 +62,20 @@ func New() (*Service, error) {
 	if err != nil {
 		return nil, fmt.Errorf("context.New: %w", err)
 	}
+	ctx.SetService(id, url)
 	err = ctx.Start()
 	if err != nil {
 		return nil, fmt.Errorf("ctx('%s').Start: %w", ctx.Type(), err)
 	}
 
 	independent := &Service{
-		ctx:         ctx,
-		Handlers:    key_value.New(),
-		proxies:     make([]*serviceConfig.Proxy, 0),
-		proxyChains: make([]*serviceConfig.ProxyChain, 0),
-		url:         url,
-		id:          id,
-		Type:        serviceConfig.IndependentType,
-		blocker:     nil,
+		ctx:      ctx,
+		Handlers: key_value.New(),
+		proxies:  make([]*serviceConfig.Proxy, 0),
+		url:      url,
+		id:       id,
+		Type:     serviceConfig.IndependentType,
+		blocker:  nil,
 	}
 
 	logger, err := log.New(id, true)
@@ -169,18 +165,65 @@ func (independent *Service) setProxy(proxy *serviceConfig.Proxy) {
 	}
 }
 
-// SetProxyChain sets a chain of proxy for a given endpoint.
-// If the proxy chain exists, then it will be overwritten.
-func (independent *Service) SetProxyChain(endpoint *serviceConfig.Endpoint, proxies ...*serviceConfig.Proxy) error {
-	if len(proxies) == 0 {
-		return fmt.Errorf("no proxies were given as a chain")
+// SetProxyChain adds a proxy chain to the list of proxy chains to set.
+func (independent *Service) SetProxyChain(params ...interface{}) error {
+	if len(params) < 2 || len(params) > 3 {
+		return fmt.Errorf("argument amount is invalid, either two or three arguments must be set")
 	}
-	proxyChain := &serviceConfig.ProxyChain{
-		Endpoint: endpoint,
-		Proxies:  proxies,
+	if independent.ctx == nil || independent.ctx.ProxyClient() == nil {
+		return fmt.Errorf("context or proxy client are not set")
 	}
 
-	independent.proxyChains = append(independent.proxyChains, proxyChain)
+	var sources []string
+	if len(params) == 3 {
+		source, ok := params[0].(string)
+		if ok {
+			sources = []string{source}
+		} else {
+			sourceUrls, ok := params[0].([]string)
+			if !ok {
+				return fmt.Errorf("first argument must be string or []string")
+			} else {
+				sources = sourceUrls
+			}
+		}
+	}
+
+	i := len(params) - 2
+	var proxies []*serviceConfig.Proxy
+	proxy, ok := params[i].(*serviceConfig.Proxy)
+	if ok {
+		proxies = []*serviceConfig.Proxy{proxy}
+	} else {
+		requiredProxies, ok := params[i].([]*serviceConfig.Proxy)
+		if !ok {
+			return fmt.Errorf("the second argument must be service.Proxy or []service.Proxy")
+		}
+		if len(requiredProxies) == 0 {
+			return fmt.Errorf("proxy argument []service.Proxy has no element")
+		}
+		proxies = requiredProxies
+	}
+
+	i++
+	var rule *serviceConfig.Rule
+	requiredRule, ok := params[i].(*serviceConfig.Rule)
+	if !ok {
+		return fmt.Errorf("the third argument must be service.Rule")
+	} else {
+		rule = requiredRule
+	}
+
+	proxyChain := &serviceConfig.ProxyChain{
+		Sources:     sources,
+		Proxies:     proxies,
+		Destination: rule,
+	}
+
+	proxyClient := independent.ctx.ProxyClient()
+	if err := proxyClient.Set(proxyChain); err != nil {
+		return fmt.Errorf("c.Set: %w", err)
+	}
 
 	return nil
 }
