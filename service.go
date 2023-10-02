@@ -144,15 +144,17 @@ func (independent *Service) SetHandler(category string, controller base.Interfac
 }
 
 // SetTypeByService overwrites the type from the extended service.
-// Maybe proxy or extension will do it.
+// Proxy and Extension calls this function.
 func (independent *Service) SetTypeByService(newType serviceConfig.Type) {
 	independent.Type = newType
 }
 
+// Url returns the url of the service source code
 func (independent *Service) Url() string {
 	return independent.url
 }
 
+// Id returns the unique id of the service
 func (independent *Service) Id() string {
 	return independent.id
 }
