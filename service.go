@@ -33,7 +33,7 @@ type Service struct {
 	Type               serviceConfig.Type
 	id                 string
 	url                string
-	parentId           string
+	parentManager      *manager.Client // parent to work with
 	blocker            *sync.WaitGroup
 	manager            *manager.Manager // manage this service from other parts
 }
@@ -111,9 +111,26 @@ func New() (*Service, error) {
 		}
 	}
 
-	parentId := ""
+	var parentConfig clientConfig.Client
 	if arg.FlagExist(flag.ParentFlag) {
-		parentId = arg.FlagValue(flag.ParentFlag)
+		parentStr := arg.FlagValue(flag.ParentFlag)
+		parentKv, err := key_value.NewFromString(parentStr)
+		if err != nil {
+			err = fmt.Errorf("key_value.NewFromString('%s'): %w", flag.ParentFlag, err)
+			if closeErr := ctx.Close(); closeErr != nil {
+				return nil, fmt.Errorf("%v: ctx.Close: %w", err, closeErr)
+			}
+			return nil, err
+		}
+		err = parentKv.Interface(&parentConfig)
+		if err != nil {
+			err = fmt.Errorf("parentKv.Interface: %w", err)
+			if closeErr := ctx.Close(); closeErr != nil {
+				return nil, fmt.Errorf("%v: ctx.Close: %w", err, closeErr)
+			}
+			return nil, err
+		}
+		parentConfig.UrlFunc(clientConfig.Url)
 	}
 
 	if len(id) == 0 {
@@ -131,12 +148,24 @@ func New() (*Service, error) {
 		return nil, err
 	}
 
-	independent.parentId = parentId
+	if len(parentConfig.Id) > 0 {
+		parent, err := manager.NewClient(&parentConfig)
+		if err != nil {
+			err = fmt.Errorf("manager.NewClient('parentConfig'): %w", err)
+			if closeErr := ctx.Close(); closeErr != nil {
+				return nil, fmt.Errorf("%v: ctx.Close: %w", err, closeErr)
+			}
+			return nil, err
+		}
+		independent.parentManager = parent
+	}
 
 	return independent, nil
 }
 
 // SetHandler of category
+//
+// Todo change to keep the handlers by their id.
 func (independent *Service) SetHandler(category string, controller base.Interface) {
 	independent.Handlers.Set(category, controller)
 }
@@ -570,7 +599,6 @@ errOccurred:
 	return independent.blocker, err
 }
 
-//
 //// prepareProxy links the proxy with the dependency.
 ////
 //// if dependency doesn't exist, it will be downloaded
