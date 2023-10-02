@@ -3,6 +3,7 @@ package manager
 
 import (
 	"fmt"
+	"github.com/ahmetson/client-lib"
 	clientConfig "github.com/ahmetson/client-lib/config"
 	serviceConfig "github.com/ahmetson/config-lib/service"
 	"github.com/ahmetson/datatype-lib/data_type/key_value"
@@ -16,6 +17,11 @@ import (
 	"sync"
 )
 
+const (
+	Heartbeat = "heartbeat"
+	Close     = "close"
+)
+
 // The Manager keeps all necessary parameters of the service.
 type Manager struct {
 	serviceUrl     string
@@ -26,6 +32,10 @@ type Manager struct {
 	ctx            context.Interface
 	blocker        **sync.WaitGroup // block the service
 	running        bool
+}
+
+type Client struct {
+	*client.Socket
 }
 
 // New service with the parameters.
@@ -53,6 +63,43 @@ func New(ctx context.Interface, blocker **sync.WaitGroup, client *clientConfig.C
 
 	return h, nil
 }
+
+// NewClient returns a manager client based on the configuration
+func NewClient(c *clientConfig.Client) (*Client, error) {
+	socket, err := client.New(c)
+	if err != nil {
+		return nil, fmt.Errorf("client.New: %w", err)
+	}
+
+	return &Client{socket}, nil
+}
+
+//
+// Client methods
+//
+
+// Heartbeat sends a command to the parent to make sure that it's live
+func (c *Client) Heartbeat() error {
+	req := &message.Request{
+		Command:    Heartbeat,
+		Parameters: key_value.New(),
+	}
+
+	reply, err := c.Request(req)
+	if err != nil {
+		return fmt.Errorf("c.Request(%s): %w", Heartbeat, err)
+	}
+
+	if !reply.IsOK() {
+		return fmt.Errorf("reply error message: %s", reply.ErrorMessage())
+	}
+
+	return nil
+}
+
+//
+// Manager Handler methods
+//
 
 // Close the service.
 //
@@ -153,11 +200,11 @@ func (m *Manager) SetDeps(configs []*clientConfig.Client) {
 // If it failed to run, then return an error.
 // The url request is the main service to which this orchestra belongs too.
 func (m *Manager) Start() error {
-	if err := m.handler.Route("close", m.onClose); err != nil {
-		return fmt.Errorf(`handler.Route("close"): %w`, err)
+	if err := m.handler.Route(Close, m.onClose); err != nil {
+		return fmt.Errorf(`handler.Route("%s"): %w`, Close, err)
 	}
-	if err := m.handler.Route("heartbeat", m.onHeartbeat); err != nil {
-		return fmt.Errorf(`handler.Route("close"): %w`, err)
+	if err := m.handler.Route(Heartbeat, m.onHeartbeat); err != nil {
+		return fmt.Errorf(`handler.Route("%s"): %w`, Heartbeat, err)
 	}
 
 	if err := m.handler.Start(); err != nil {
