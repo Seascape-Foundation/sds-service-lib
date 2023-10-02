@@ -36,8 +36,6 @@ type Service struct {
 	url                string
 	blocker            *sync.WaitGroup
 	manager            *manager.Manager // manage this service from other parts
-	proxyChains        []*serviceConfig.ProxyChain
-	proxyUnits         map[*serviceConfig.Rule][]*serviceConfig.Unit
 }
 
 type Auxiliary struct {
@@ -74,14 +72,12 @@ func New() (*Service, error) {
 	}
 
 	independent := &Service{
-		ctx:         ctx,
-		Handlers:    key_value.New(),
-		url:         url,
-		id:          id,
-		Type:        serviceConfig.IndependentType,
-		blocker:     nil,
-		proxyChains: make([]*serviceConfig.ProxyChain, 0),
-		proxyUnits:  make(map[*serviceConfig.Rule][]*serviceConfig.Unit, 0),
+		ctx:      ctx,
+		Handlers: key_value.New(),
+		url:      url,
+		id:       id,
+		Type:     serviceConfig.IndependentType,
+		blocker:  nil,
 	}
 
 	logger, err := log.New(id, true)
@@ -489,22 +485,25 @@ func (independent *Service) prepareProxyChains() error {
 	if err != nil {
 		return fmt.Errorf("proxyClient.ProxyChainsByRuleUrl: %w", err)
 	}
-	independent.proxyChains = proxyChains
-
-	independent.proxyUnits = make(map[*serviceConfig.Rule][]*serviceConfig.Unit, len(proxyChains))
 
 	// set the proxy destination units for each rule
-	for _, proxyChain := range independent.proxyChains {
+	for _, proxyChain := range proxyChains {
 		dest := proxyChain.Destination
 		if dest.IsRoute() {
 			units := independent.unitsByRouteRule(dest)
-			independent.proxyUnits[dest] = units
+			if err := proxyClient.SetUnits(dest, units); err != nil {
+				return fmt.Errorf("proxyClient.SetUnits: %w", err)
+			}
 		} else if dest.IsHandler() {
 			units := independent.unitsByHandlerRule(dest)
-			independent.proxyUnits[dest] = units
+			if err := proxyClient.SetUnits(dest, units); err != nil {
+				return fmt.Errorf("proxyClient.SetUnits: %w", err)
+			}
 		} else if dest.IsService() {
 			units := independent.unitsByServiceRule(dest)
-			independent.proxyUnits[dest] = units
+			if err := proxyClient.SetUnits(dest, units); err != nil {
+				return fmt.Errorf("proxyClient.SetUnits: %w", err)
+			}
 		}
 	}
 
