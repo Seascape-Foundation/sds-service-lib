@@ -1,18 +1,32 @@
 # Proxy
-Proxy is a special type of service that sits at the front of independent services.
-The proxies do a pre-computation such as validation, authentication, authorization, load-balancing and many more.
+The proxies are auxiliary services.
+They do some operation on the request before independent services.
+
+The proxies could be used for validation, authentication, authorization, load-balancing.
 
 Proxies can be organized as a chain of proxies.
-However, the destination of the proxy must be pointing always to the independent service routes.
+The proxy B receives a message only if proxy A succeeded.
 
+As auxiliary service, proxies must always forward the messages.
+Therefore, proxies must have the destination to forward the message.
+
+## Parent-child relationship
+Even though the proxies are spawned by the parent proxies.
+There is possible to create a proxy that will manage the parent too.
+For example, the proxies of the *rely* category could manage the independent services.
 
 ## Category
-By behavior, the proxies are classified into categories:
-* *entry* &ndash; proxies set a different protocol for receiving data
+When there is a proxy chain, there must be some order of the proxies.
+
+By behavior, the proxies are classified into categories.
+And the proxies are ordered by default on its category.
+
+The categories are:
+* *entry* &ndash; proxies set a different protocol for receiving data. Use `PairExternal` method.
 * *authn* &ndash; proxies authorize the requester
 * *authr* &ndash; proxies set the role-based access
 * *valid* &ndash; proxies validate the message
-* *convert* &ndash; proxies serialize/deserialize the messages.
+* *convert* &ndash; proxies serialize/deserialize the messages. Use `SetMessageOperations` method.
 * *reliability* &ndash; proxies are responsible for service availability. Examples are backup, load balancing.
 
 The default order in which proxies are chained is
@@ -24,164 +38,19 @@ The default order in which proxies are chained is
 > **destination**
 
 ## Definition
-One of the aims of SDS framework is to write self-managing applications.
+There are two ways to define proxies.
+At the independent service also called *built in definition*.
+Or, using the `meta` interface also called *on the fly*.
 
-The independent service as the keeper of the business logic is the core of the application.
-On the other hand, proxy-chain could be updated on the fly.
+If the destination service has the proxies, then proxies are added in order by [category](#category).
 
-This is the reason why proxies are defined in the independent service.
-When starts, the independent service will run the proxies as well.
-
-
-### Url
-We start defining the proxy by its url, which happens in the independent service.
-
-```go
-webProxy := config.NewProxy("url")
-sshProxy := config.NewProxy("url")
-```
-
-### Destination
-Then, we have to define the destination.
-
-Proxies can apply themselves to the whole service, to the specific handler or to the specific route.
-The route is the minimal destination.
-
-> It's not a final type of destination.
-> The proxy will ask the destination for its id and duplicates.
-> If the duplicates are given, then it will send by round-robin format.
+> **Todo**
 >
-> This will allow, for example, two identical handlers, or two identical services to be supported by the proxy.
+> `meta` interface is not yet developed.
+> The idea of the meta is to access to the service including its context.
 
-The following line of code defines a destination with one route.
+Refer to [build in definition](BUILT_IN_DEFINE.md) for description on how to add proxies.
 
-```go
-package readme
-// config package is defined in service-lib/config
-destinations := config.NewDestination(
-	[]string{"url"}, 
-	[]string{"category_1", "category_2"},
-	[]string{"route_1"})
-```
-
-The `url` parameter is optional. Without it, the current independent service is counted as the destination.
-
-The unit parameters are joint by Union set. 
-The code above will search for `url.category_1.route_1` and `url.category_2.route_1`.
-
-Listing all routes explicitly is tiresome. The other way to define routes is by handler name.
-
-```go
-destinations = config.NewHandlerDestination([]string{"url"}, []string{"category"})
-```
-
-The url argument is optional. If it wasn't given, the current service is counted as the destination.
-
-When you are listing the handler as the destination, sometimes you want to exclude some routes.
-It's done by `Exclude`:
-
-```go
-destinations.Exclude("command_1", "command_2", ...)
-```
-
-Or excluded by other destinations.
-
-```go
-destinations.Exclude(sub_destinations)
-```
-
-### Recap of destination
-
-* Independent service manages the proxy.
-* Proxies for the service are defined in the service.
-* Definition always must point the service as the destination.
-* Proxy could be applied to the all services, to the handlers or to some routes.
-* Proxy can organize a chain.
-* Destinations can be defined as the routes or as the handlers.
-* The following route destinations are identical:
-* - `config.NewDestination(["url_1"], ["category_1"], ["cmd_1"])`
-* The following handler destinations are identical:
-* - `config.NewHandlerDestination(["url_1"], ["category_1"])`
-* In both functions, the url parameter is optional
-* Some destinations might be excluded:
-* - `destinations.Exclude("command_1")`
-* - `destinations.ExcludeByUnit(subDestinations)`
-
-
-### Source
-The proxy receives the data from anyone who has access to the machine.
-To narrow the access, we can set the sources.
-
-The sources define the list of the url or at least a one. 
-Then only the services of the url could access to the proxy.
-
-### Register
-Finally, the prepared proxy, destination and optional source is set in the independent service as a 
-proxy chain:
-
-```go
-proxyChain := service.NewProxyChain(source1, [proxy1, proxy2], destination)
-
-service := independent.New("id")
-service.SetProxyChains(proxyChain)
-```
-
-If request to `proxy1` is passing, then a message is forwarded to `proxy2`.
-
-### Recap of registering
-
-The example code of proxy registering:
-
-```go
-// defining dependency
-webProxy        := config.NewProxy("url") 
-sshProxy        := config.NewProxy("url") 
-scheduleProxy   := config.NewProxy("url")
-plainProxy      := config.NewProxy("url")
-
-// defining destinations
-manageRoutes    := config.NewDestination("main", ["admin_set_1", "admin_set_2"])
-announceRoute   := config.NewDestination("main", "announce")
-allRoutes       := config.NewHandlerDestination("main")
-publicRoutes    := allRoutes.Exclude(announceRoute, manageRoutes)
-
-userChain := config.NewProxyChain([webProxy, plainProxy], publicRoutes)
-managerChain := config.NewProxyChain([sshProxy, plainProxy], manageProxy)
-announceChain := config.NewProxyChain(service.Url(), scheduleProxy, announceRoute)
-
-// todo linter adds an explanation:
-err := service.SetProxyChain(userChain, managerChain, announceChain)
-```
-
-Setting the explicit sources will allow access to the first proxy from the list of sources only.
-
-This is the end of proxy definitions.
-The next section will explain how to define the proxy itself.
-All the definitions are defined by the `config-lib` and `service-lib`.
-The actual implementation of the proxy is defined in the `proxy-lib` module.
-
-> Checking the source is done by the security layer.
-
-> **todo**
-> 
-> implement auto-chain by proxy id
-
-## Execution
-The independent service will run the last proxy.
-The parent will pass to the proxy the id, url, parent id, and link to the configuration.
-The proxy will generate its configuration.
-The last proxy will start the next service in the chain.
-The steps are repeated until it will reach the first proxy.
-
-When the proxy chain was defined, the destination was declared as a rule.
-However, it doesn't contain the information about the handler endpoint,
-or the list of the matching and excluded routes.
-
-The proxy will get the destination and source information.
-The proxy will get the handler information from the parent.
-It will then get the information about the routes, excluded routes as well from parent.
-
-> The excluded routes are returned if the routes are empty.
 
 ## Multi source
 If the service has a multiple allowed service, then they are assisted.
