@@ -20,6 +20,7 @@ import (
 	"github.com/ahmetson/os-lib/arg"
 	"github.com/ahmetson/service-lib/flag"
 	"github.com/ahmetson/service-lib/manager"
+	"slices"
 	"sync"
 )
 
@@ -36,6 +37,8 @@ type Service struct {
 	parentManager      *manager.Client // parent to work with
 	blocker            *sync.WaitGroup
 	manager            *manager.Manager // manage this service from other parts
+	proxyChains        []*serviceConfig.ProxyChain
+	proxyUnits         map[*serviceConfig.Rule][]*serviceConfig.Unit
 }
 
 // New service.
@@ -61,19 +64,20 @@ func New() (*Service, error) {
 	if err != nil {
 		return nil, fmt.Errorf("context.New: %w", err)
 	}
-	ctx.SetService(id, url)
-	err = ctx.Start()
+	err = ctx.StartConfig()
 	if err != nil {
-		return nil, fmt.Errorf("ctx('%s').Start: %w", ctx.Type(), err)
+		return nil, fmt.Errorf("ctx('%s').StartConfig: %w", ctx.Type(), err)
 	}
 
 	independent := &Service{
-		ctx:      ctx,
-		Handlers: key_value.New(),
-		url:      url,
-		id:       id,
-		Type:     serviceConfig.IndependentType,
-		blocker:  nil,
+		ctx:         ctx,
+		Handlers:    key_value.New(),
+		url:         url,
+		id:          id,
+		Type:        serviceConfig.IndependentType,
+		blocker:     nil,
+		proxyChains: make([]*serviceConfig.ProxyChain, 0),
+		proxyUnits:  make(map[*serviceConfig.Rule][]*serviceConfig.Unit, 0),
 	}
 
 	logger, err := log.New(id, true)
@@ -433,9 +437,9 @@ func (independent *Service) lintConfig() error {
 	return nil
 }
 
-// prepareServiceConfig sets the configuration of this service and handlers.
-// if the configuration doesn't exist, generates the service and handler.
-// the returned configuration from the context is linted into service and handler.
+// The prepareServiceConfig sets the configuration of this service and handlers.
+// If the configuration doesn't exist, generates the service and handler.
+// The returned configuration from the context is linted into service and handler.
 func (independent *Service) prepareServiceConfig() error {
 	configClient := independent.ctx.Config()
 
@@ -460,6 +464,131 @@ func (independent *Service) prepareServiceConfig() error {
 	}
 
 	return nil
+}
+
+// The prepareProxyChains gets the list of proxy chains for this service.
+// Then, it creates a proxy units.
+// todo if the extension is sending a ready command, then update the command list.
+func (independent *Service) prepareProxyChains() error {
+	proxyClient := independent.ctx.ProxyClient()
+	proxyChains, err := proxyClient.ProxyChainsByRuleUrl(independent.url)
+	if err != nil {
+		return fmt.Errorf("proxyClient.ProxyChainsByRuleUrl: %w", err)
+	}
+	independent.proxyChains = proxyChains
+
+	independent.proxyUnits = make(map[*serviceConfig.Rule][]*serviceConfig.Unit, len(proxyChains))
+
+	// set the proxy destination units for each rule
+	for _, proxyChain := range independent.proxyChains {
+		dest := proxyChain.Destination
+		if dest.IsRoute() {
+			units := independent.unitsByRouteRule(dest)
+			independent.proxyUnits[dest] = units
+		} else if dest.IsHandler() {
+			units := independent.unitsByHandlerRule(dest)
+			independent.proxyUnits[dest] = units
+		} else if dest.IsService() {
+			units := independent.unitsByServiceRule(dest)
+			independent.proxyUnits[dest] = units
+		}
+	}
+
+	return nil
+}
+
+// unitsByRouteRule returns the list of units for the route rule
+func (independent *Service) unitsByRouteRule(rule *serviceConfig.Rule) []*serviceConfig.Unit {
+	units := make([]*serviceConfig.Unit, len(rule.Commands)*len(rule.Categories))
+
+	for _, raw := range independent.Handlers {
+		handlerInterface := raw.(base.Interface)
+		hConfig := handlerInterface.Config()
+
+		if !slices.Contains(rule.Categories, hConfig.Category) {
+			continue
+		}
+
+		for _, command := range rule.Commands {
+			if slices.Contains(rule.ExcludedCommands, command) {
+				continue
+			}
+
+			if !handlerInterface.IsRouteExist(command) {
+				continue
+			}
+
+			unit := &serviceConfig.Unit{
+				ServiceId: independent.id,
+				HandlerId: hConfig.Id,
+				Command:   command,
+			}
+
+			units = append(units, unit)
+		}
+	}
+
+	return units
+}
+
+// unitsByHandlerRule returns the list of units for the handler rule
+func (independent *Service) unitsByHandlerRule(rule *serviceConfig.Rule) []*serviceConfig.Unit {
+	units := make([]*serviceConfig.Unit, len(rule.Categories))
+
+	for _, raw := range independent.Handlers {
+		handlerInterface := raw.(base.Interface)
+		hConfig := handlerInterface.Config()
+
+		if !slices.Contains(rule.Categories, hConfig.Category) {
+			continue
+		}
+
+		commands := handlerInterface.RouteCommands()
+
+		for _, command := range commands {
+			if slices.Contains(rule.ExcludedCommands, command) {
+				continue
+			}
+
+			unit := &serviceConfig.Unit{
+				ServiceId: independent.id,
+				HandlerId: hConfig.Id,
+				Command:   command,
+			}
+
+			units = append(units, unit)
+		}
+	}
+
+	return units
+}
+
+// unitsByServiceRule returns the list of units for the service rule
+func (independent *Service) unitsByServiceRule(rule *serviceConfig.Rule) []*serviceConfig.Unit {
+	units := make([]*serviceConfig.Unit, len(rule.Categories))
+
+	for _, raw := range independent.Handlers {
+		handlerInterface := raw.(base.Interface)
+		hConfig := handlerInterface.Config()
+
+		commands := handlerInterface.RouteCommands()
+
+		for _, command := range commands {
+			if slices.Contains(rule.ExcludedCommands, command) {
+				continue
+			}
+
+			unit := &serviceConfig.Unit{
+				ServiceId: independent.id,
+				HandlerId: hConfig.Id,
+				Command:   command,
+			}
+
+			units = append(units, unit)
+		}
+	}
+
+	return units
 }
 
 // newManager creates a manager.Manager and assigns it to manager, otherwise manager is nil.
@@ -528,8 +657,24 @@ func (independent *Service) Start() (*sync.WaitGroup, error) {
 		goto errOccurred
 	}
 
+	independent.ctx.SetService(independent.id, independent.url)
+	if err = independent.ctx.StartDepManager(); err != nil {
+		err = fmt.Errorf("ctx.StartDepManager: %w", err)
+		goto errOccurred
+	}
+	if err = independent.ctx.StartProxyHandler(); err != nil {
+		err = fmt.Errorf("ctx.StartProxyHandler: %w", err)
+		goto errOccurred
+	}
+
 	if err = independent.newManager(); err != nil {
 		err = fmt.Errorf("newManager: %w", err)
+		goto errOccurred
+	}
+
+	// get the proxies from the proxy chain for this service.
+	if err = independent.prepareProxyChains(); err != nil {
+		err = fmt.Errorf("independent.prepareProxyChains: %w", err)
 		goto errOccurred
 	}
 
