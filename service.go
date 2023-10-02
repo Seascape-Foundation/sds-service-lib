@@ -28,7 +28,6 @@ type Service struct {
 	config             *serviceConfig.Service
 	ctx                context.Interface // context handles the configuration and dependencies
 	Handlers           key_value.KeyValue
-	proxies            []*serviceConfig.Proxy
 	RequiredExtensions key_value.KeyValue
 	Logger             *log.Logger
 	Type               serviceConfig.Type
@@ -71,7 +70,6 @@ func New() (*Service, error) {
 	independent := &Service{
 		ctx:      ctx,
 		Handlers: key_value.New(),
-		proxies:  make([]*serviceConfig.Proxy, 0),
 		url:      url,
 		id:       id,
 		Type:     serviceConfig.IndependentType,
@@ -157,14 +155,6 @@ func (independent *Service) Url() string {
 // Id returns the unique id of the service
 func (independent *Service) Id() string {
 	return independent.id
-}
-
-// setProxy adds a proxy that's needed for this service to run.
-// Service has to have a pipeline.
-func (independent *Service) setProxy(proxy *serviceConfig.Proxy) {
-	if !serviceConfig.IsProxyExist(independent.proxies, proxy.Id) {
-		independent.proxies = append(independent.proxies, proxy)
-	}
 }
 
 // SetProxyChain adds a proxy chain to the list of proxy chains to set.
@@ -259,37 +249,6 @@ func (independent *Service) RunManager() error {
 	requiredExtensions := independent.requiredControllerExtensions()
 
 	//
-	// prepare proxies configurations
-	//--------------------------------------------------
-	if len(independent.proxies) > 0 {
-		//for _, requiredProxy := range independent.proxies {
-		//var dep *dev.Dep
-
-		//dep, err = independent.ctx.New(requiredProxy)
-		//if err != nil {
-		//	err = fmt.Errorf(`service.Interface.New("%s"): %w`, requiredProxy, err)
-		//	goto closeContext
-		//}
-
-		// Sets the default values.
-		//if err = independent.prepareProxyConfiguration(dep); err != nil {
-		//	err = fmt.Errorf("service.prepareProxyConfiguration(%s): %w", requiredProxy, err)
-		//	goto closeContext
-		//}
-		//}
-
-		//if len(independent.pipelines) == 0 {
-		//	err = fmt.Errorf("no pipeline to lint the proxy to the handler")
-		//	goto closeContext
-		//}
-
-		//if err = independent.preparePipelineConfigurations(); err != nil {
-		//	err = fmt.Errorf("preparePipelineConfigurations: %w", err)
-		//	goto closeContext
-		//}
-	}
-
-	//
 	// prepare extensions configurations
 	//------------------------------------------------------
 	if len(requiredExtensions) > 0 {
@@ -339,19 +298,6 @@ func (independent *Service) RunManager() error {
 				goto closeContext
 			}
 		}
-	}
-
-	// run proxies if they are needed.
-	if len(independent.proxies) > 0 {
-		//for _, requiredProxy := range independent.proxies {
-		// We don't check for the error, since preparing the config should do that already.
-		//dep, _ := independent.Context.Dep(requiredProxy)
-		//
-		//if err = independent.prepareProxy(dep); err != nil {
-		//	err = fmt.Errorf(`service.prepareProxy("%s"): %w`, requiredProxy, err)
-		//	goto closeContext
-		//}
-		//}
 	}
 
 	// run extensions if they are needed.
