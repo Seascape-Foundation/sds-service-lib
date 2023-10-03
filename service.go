@@ -211,9 +211,9 @@ func (independent *Service) SetProxyChain(params ...interface{}) error {
 
 	var sources []string
 	if len(params) == 3 {
-		source, ok := params[0].(string)
+		src, ok := params[0].(string)
 		if ok {
-			sources = []string{source}
+			sources = []string{src}
 		} else {
 			sourceUrls, ok := params[0].([]string)
 			if !ok {
