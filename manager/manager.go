@@ -114,10 +114,10 @@ func (c *Client) Heartbeat() error {
 // Todo It doesn't close the proxies, which it must close.
 func (m *Manager) Close() error {
 	// closing all handlers
-	for _, client := range m.handlerClients {
-		err := client.Close()
+	for _, handlerClient := range m.handlerClients {
+		err := handlerClient.Close()
 		if err != nil {
-			return fmt.Errorf("handlerManagerClient('%s').Close: %v", client.Id(), err)
+			return fmt.Errorf("handlerManagerClient('%s').Close: %v", handlerClient.Id(), err)
 		}
 	}
 
