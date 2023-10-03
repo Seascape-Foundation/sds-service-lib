@@ -18,8 +18,9 @@ import (
 )
 
 const (
-	Heartbeat = "heartbeat"
-	Close     = "close"
+	Heartbeat           = "heartbeat"
+	Close               = "close"
+	ProxyChainsByLastId = "proxy-chains-by-last-id"
 )
 
 // The Manager keeps all necessary parameters of the service.
@@ -97,6 +98,35 @@ func (c *Client) Heartbeat() error {
 	return nil
 }
 
+func (c *Client) ProxyChainsByLastProxy(proxyId string) ([]*serviceConfig.ProxyChain, error) {
+	req := &message.Request{
+		Command:    ProxyChainsByLastId,
+		Parameters: key_value.New().Set("id", proxyId),
+	}
+	reply, err := c.Request(req)
+	if err != nil {
+		return nil, fmt.Errorf("c.Request: %w", err)
+	}
+	if !reply.IsOK() {
+		return nil, fmt.Errorf("reply error message: %s", reply.ErrorMessage())
+	}
+
+	kvList, err := reply.ReplyParameters().NestedListValue("proxy_chains")
+	if err != nil {
+		return nil, fmt.Errorf("reply.ReplyParameters().NestedKeyValueList('proxy_chains'): %w", err)
+	}
+
+	proxyChains := make([]*serviceConfig.ProxyChain, len(kvList))
+	for i, kv := range kvList {
+		err = kv.Interface(proxyChains[i])
+		if err != nil {
+			return nil, fmt.Errorf("kv.Interface(proxyChains[%d]): %w", i, err)
+		}
+	}
+
+	return proxyChains, nil
+}
+
 //
 // Manager Handler methods
 //
@@ -169,6 +199,22 @@ func (m *Manager) onHeartbeat(req message.RequestInterface) message.ReplyInterfa
 	return req.Ok(key_value.New())
 }
 
+// onProxyChainsByLastProxy returns a list of proxy chains by the id of the last proxy
+func (m *Manager) onProxyChainsByLastProxy(req message.RequestInterface) message.ReplyInterface {
+	id, err := req.RouteParameters().StringValue("id")
+	if err != nil {
+		return req.Fail(fmt.Sprintf("req.RouteParameters().StringValue('id'): %v", err))
+	}
+	proxyClient := m.ctx.ProxyClient()
+	proxyChains, err := proxyClient.ProxyChainsByLastId(id)
+	if err != nil {
+		return req.Fail(fmt.Sprintf("proxyClient.ProxyChainsByLastId('%s'): %v", id, err))
+	}
+
+	params := key_value.New().Set("proxy_chains", proxyChains)
+	return req.Ok(params)
+}
+
 // Config of the manager
 func (m *Manager) Config(client *clientConfig.Client) *handlerConfig.Handler {
 	return &handlerConfig.Handler{
@@ -205,6 +251,9 @@ func (m *Manager) Start() error {
 	}
 	if err := m.handler.Route(Heartbeat, m.onHeartbeat); err != nil {
 		return fmt.Errorf(`handler.Route("%s"): %w`, Heartbeat, err)
+	}
+	if err := m.handler.Route(ProxyChainsByLastId, m.onProxyChainsByLastProxy); err != nil {
+		return fmt.Errorf(`handler.Route("%s"): %w`, ProxyChainsByLastId, err)
 	}
 
 	if err := m.handler.Start(); err != nil {
