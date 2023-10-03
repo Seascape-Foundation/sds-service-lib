@@ -21,6 +21,7 @@ const (
 	Heartbeat           = "heartbeat"
 	Close               = "close"
 	ProxyChainsByLastId = "proxy-chains-by-last-id"
+	Units               = "units"
 )
 
 // The Manager keeps all necessary parameters of the service.
@@ -127,6 +128,39 @@ func (c *Client) ProxyChainsByLastProxy(proxyId string) ([]*serviceConfig.ProxyC
 	return proxyChains, nil
 }
 
+// The Units method returns the destination units by a rule.
+func (c *Client) Units(rule *serviceConfig.Rule) ([]*serviceConfig.Unit, error) {
+	req := &message.Request{
+		Command:    Units,
+		Parameters: key_value.New().Set("rule", rule),
+	}
+	reply, err := c.Request(req)
+	if err != nil {
+		return nil, fmt.Errorf("c.Request: %w", err)
+	}
+	if !reply.IsOK() {
+		return nil, fmt.Errorf("reply error message: %s", reply.ErrorMessage())
+	}
+
+	rawUnits, err := reply.ReplyParameters().NestedListValue("units")
+	if err != nil {
+		return nil, fmt.Errorf("reply.ReplyParameters().NestedKeyValueList('proxy_chains'): %w", err)
+	}
+
+	units := make([]*serviceConfig.Unit, len(rawUnits))
+	for i, rawUnit := range rawUnits {
+		var unit serviceConfig.Unit
+		err = rawUnit.Interface(&unit)
+		if err != nil {
+			return nil, fmt.Errorf("rawUnits[%d].Interface: %w", i, err)
+		}
+
+		units[i] = &unit
+	}
+
+	return units, nil
+}
+
 //
 // Manager Handler methods
 //
@@ -215,6 +249,33 @@ func (m *Manager) onProxyChainsByLastProxy(req message.RequestInterface) message
 	return req.Ok(params)
 }
 
+// onUnits returns a list of destination units by a rule
+func (m *Manager) onUnits(req message.RequestInterface) message.ReplyInterface {
+	raw, err := req.RouteParameters().NestedValue("rule")
+	if err != nil {
+		return req.Fail(fmt.Sprintf("req.RouteParameters().NestedValue('proxy_chain'): %v", err))
+	}
+
+	var rule serviceConfig.Rule
+	err = raw.Interface(&rule)
+	if err != nil {
+		return req.Fail(fmt.Sprintf("key_value.KeyValue('proxy_chain').Interface(): %v", err))
+	}
+
+	if !rule.IsValid() {
+		return req.Fail("the 'rule' parameter is not valid")
+	}
+
+	proxyClient := m.ctx.ProxyClient()
+	units, err := proxyClient.Units(&rule)
+	if err != nil {
+		return req.Fail(fmt.Sprintf("proxyClient.Units: %v", err))
+	}
+
+	params := key_value.New().Set("units", units)
+	return req.Ok(params)
+}
+
 // Config of the manager
 func (m *Manager) Config(client *clientConfig.Client) *handlerConfig.Handler {
 	return &handlerConfig.Handler{
@@ -254,6 +315,9 @@ func (m *Manager) Start() error {
 	}
 	if err := m.handler.Route(ProxyChainsByLastId, m.onProxyChainsByLastProxy); err != nil {
 		return fmt.Errorf(`handler.Route("%s"): %w`, ProxyChainsByLastId, err)
+	}
+	if err := m.handler.Route(Units, m.onUnits); err != nil {
+		return fmt.Errorf(`handler.Route("%s"): %w`, Units, err)
 	}
 
 	if err := m.handler.Start(); err != nil {
