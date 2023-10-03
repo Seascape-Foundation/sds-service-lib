@@ -749,14 +749,19 @@ func (independent *Service) Start() (*sync.WaitGroup, error) {
 		startedHandlers = append(startedHandlers, category)
 	}
 
-	// todo
-	// prepare the proxies by calling them in the context.
+	// todo prepare the extensions by calling them in the context.
+	// todo prepare the extensions by setting them into the independent.manager.
 	// prepare the proxies by setting them into the independent.manager.
 	// prepare the extensions by calling them in the context.
 	// prepare the extensions by setting them into the independent.manager.
 
 	if err = independent.manager.Start(); err != nil {
 		err = fmt.Errorf("service.manager.Start: %w", err)
+		goto errOccurred
+	}
+
+	if err = independent.ctx.ProxyClient().StartLastProxies(); err != nil {
+		err = fmt.Errorf("ctx.ProxyClient.StartLastProxies: %w", err)
 		goto errOccurred
 	}
 
