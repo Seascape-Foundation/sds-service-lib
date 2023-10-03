@@ -510,6 +510,45 @@ func (independent *Service) prepareProxyChains() error {
 	return nil
 }
 
+// prepareProxyChains prepares the proxy chains by fetching the proxies from the parent
+// and storing them in this service
+func (auxiliary *Auxiliary) prepareProxyChains() error {
+	parentClient := auxiliary.ParentManager
+	proxyChains, err := parentClient.ProxyChainsByLastProxy(auxiliary.id)
+	if err != nil {
+		return fmt.Errorf("auxiliary.ParentManager.ProxyChainsByRuleUrl: %w", err)
+	}
+
+	proxyClient := auxiliary.ctx.ProxyClient()
+
+	auxiliary.Logger.Warn("copying proxy chain rule from the parent to the child",
+		"warning 1", "the proxy may be over-writing it by adding another units",
+		"solution 1", "to the Set and SetUnits of proxy client add an merge flag so it will add to already existing data")
+
+	// set the proxy destination units for each rule
+	for _, proxyChain := range proxyChains {
+		// the last proxy in the list is removed as its this service
+		proxyChain.Proxies = proxyChain.Proxies[:len(proxyChain.Proxies)-1]
+		if len(proxyChain.Proxies) > 0 {
+			err := proxyClient.Set(proxyChain)
+			if err != nil {
+				return fmt.Errorf("proxyClient.Set: %w", err)
+			}
+		}
+
+		rule := proxyChain.Destination
+		units, err := parentClient.Units(rule)
+		if err != nil {
+			return fmt.Errorf("parentClient.Units: %w", err)
+		}
+		if err := proxyClient.SetUnits(rule, units); err != nil {
+			return fmt.Errorf("proxyClient.SetUnits: %w", err)
+		}
+	}
+
+	return nil
+}
+
 // unitsByRouteRule returns the list of units for the route rule
 func (independent *Service) unitsByRouteRule(rule *serviceConfig.Rule) []*serviceConfig.Unit {
 	units := make([]*serviceConfig.Unit, 0, len(rule.Commands)*len(rule.Categories))
