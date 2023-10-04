@@ -178,3 +178,20 @@ func (c *Client) HandlersByRule(rule *serviceConfig.Rule) ([]*handlerConfig.Hand
 
 	return configs, nil
 }
+
+// The ProxyConfigSet method tells to the parent that proxy configuration set
+func (c *Client) ProxyConfigSet(rule *serviceConfig.Rule, serviceSource *serviceConfig.SourceService) error {
+	req := &message.Request{
+		Command:    ProxyConfigSet,
+		Parameters: key_value.New().Set("rule", rule).Set("service_source", serviceSource),
+	}
+	reply, err := c.Request(req)
+	if err != nil {
+		return fmt.Errorf("c.Request: %w", err)
+	}
+	if !reply.IsOK() {
+		return fmt.Errorf("reply error message: %s", reply.ErrorMessage())
+	}
+
+	return nil
+}

@@ -23,6 +23,7 @@ const (
 	Handlers            = "handlers"             // returns handler configurations
 	HandlersByCategory  = "handlers-by-category" // returns the handler configurations by their category
 	HandlersByRule      = "handlers-by-rule"     // returns the handler configurations filtered by serviceConfig.Rule
+	ProxyConfigSet      = "proxy-config-set"     // proxy calls this route when there configuration was set
 )
 
 // The Manager keeps all necessary parameters of the service.
@@ -177,32 +178,63 @@ func (m *Manager) onUnits(req message.RequestInterface) message.ReplyInterface {
 	return req.Ok(params)
 }
 
-//// onProxyGenerated sets the proxy information
-//func (m *Manager) onProxyGenerated(req message.RequestInterface) message.ReplyInterface {
-//	raw, err := req.RouteParameters().NestedValue("rule")
-//	if err != nil {
-//		return req.Fail(fmt.Sprintf("req.RouteParameters().NestedValue('proxy_chain'): %v", err))
-//	}
-//
-//	var rule serviceConfig.Rule
-//	err = raw.Interface(&rule)
-//	if err != nil {
-//		return req.Fail(fmt.Sprintf("key_value.KeyValue('proxy_chain').Interface(): %v", err))
-//	}
-//
-//	if !rule.IsValid() {
-//		return req.Fail("the 'rule' parameter is not valid")
-//	}
-//
-//	proxyClient := m.ctx.ProxyClient()
-//	units, err := proxyClient.Units(&rule)
-//	if err != nil {
-//		return req.Fail(fmt.Sprintf("proxyClient.Units: %v", err))
-//	}
-//
-//	params := key_value.New().Set("units", units)
-//	return req.Ok(params)
-//}
+// onProxyConfigSet sets the proxy information for a rule as the proxy is set it's configuration
+func (m *Manager) onProxyConfigSet(req message.RequestInterface) message.ReplyInterface {
+	raw, err := req.RouteParameters().NestedValue("rule")
+	if err != nil {
+		return req.Fail(fmt.Sprintf("req.RouteParameters().NestedValue('proxy_chain'): %v", err))
+	}
+	rawSource, err := req.RouteParameters().NestedValue("source_service")
+	if err != nil {
+		return req.Fail(fmt.Sprintf("req.RouteParameters().NestedValue('proxy_chain'): %v", err))
+	}
+
+	var rule serviceConfig.Rule
+	err = raw.Interface(&rule)
+	if err != nil {
+		return req.Fail(fmt.Sprintf("key_value.KeyValue('proxy_chain').Interface(): %v", err))
+	}
+
+	if !rule.IsValid() {
+		return req.Fail("the 'rule' parameter is not valid")
+	}
+
+	var sourceService serviceConfig.SourceService
+	err = rawSource.Interface(&sourceService)
+	if err != nil {
+		return req.Fail(fmt.Sprintf("key_value.KeyValue('source_service').Interface(): %v", err))
+	}
+
+	proxyId := sourceService.Id
+
+	proxyClient := m.ctx.ProxyClient()
+	proxyChains, err := proxyClient.ProxyChainsByLastId(proxyId)
+	if err != nil {
+		return req.Fail(fmt.Sprintf("proxyClient.ProxyChainsByLastId('%s'): %v", proxyId, err))
+	}
+
+	proxyChain := serviceConfig.ProxyChainByRule(proxyChains, &rule)
+	if proxyChain == nil {
+		return req.Fail("the proxy and rule are mismatching")
+	}
+
+	configClient := m.ctx.Config()
+	c, err := configClient.Service(m.serviceId)
+	if err != nil {
+		return req.Fail(fmt.Sprintf("configClient.Service('%s'): %v", m.serviceId, err))
+	}
+
+	serviceUpdated := c.SetServiceSource(&rule, &sourceService)
+	if serviceUpdated {
+		err = configClient.SetService(c)
+		if err != nil {
+			req.Fail(fmt.Sprintf("configClient.SetService: %v", err))
+		}
+	}
+
+	params := key_value.New()
+	return req.Ok(params)
+}
 
 // The handlers return the handler configurations
 func (m *Manager) handlers() ([]*handlerConfig.Handler, error) {
@@ -340,6 +372,9 @@ func (m *Manager) Start() error {
 	}
 	if err := m.Route(HandlersByRule, m.onHandlersByRule); err != nil {
 		return fmt.Errorf(`handler.Route("%s"): %w`, HandlersByRule, err)
+	}
+	if err := m.Route(ProxyConfigSet, m.onProxyConfigSet); err != nil {
+		return fmt.Errorf(`handler.Route("%s"): %w`, ProxyConfigSet, err)
 	}
 
 	if err := m.Start(); err != nil {
