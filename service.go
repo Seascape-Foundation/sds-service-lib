@@ -14,7 +14,6 @@ import (
 	"github.com/ahmetson/datatype-lib/data_type/key_value"
 	context "github.com/ahmetson/dev-lib"
 	"github.com/ahmetson/handler-lib/base"
-	handlerConfig "github.com/ahmetson/handler-lib/config"
 	"github.com/ahmetson/handler-lib/manager_client"
 	"github.com/ahmetson/log-lib"
 	"github.com/ahmetson/os-lib/arg"
@@ -284,86 +283,6 @@ func (independent *Service) requiredControllerExtensions() []string {
 	}
 
 	return extensions
-}
-
-// RunManager the services by validating, linting the configurations, as well as setting up the dependencies
-func (independent *Service) RunManager() error {
-
-	requiredExtensions := independent.requiredControllerExtensions()
-
-	//
-	// prepare extensions configurations
-	//------------------------------------------------------
-	if len(requiredExtensions) > 0 {
-		independent.Logger.Warn("extensions needed to be prepared", "extensions", requiredExtensions)
-		//for _, requiredExtension := range requiredExtensions {
-		//var dep *dev.Dep
-		//
-		//dep, err = independent.Context.New(requiredExtension)
-		//if err != nil {
-		//	err = fmt.Errorf(`service.Interface.New("%s"): %w`, requiredExtension, err)
-		//	goto closeContext
-		//}
-		//
-		//if err = independent.prepareExtensionConfiguration(dep); err != nil {
-		//	err = fmt.Errorf(`service.prepareExtensionConfiguration("%s"): %w`, requiredExtension, err)
-		//	goto closeContext
-		//}
-		//}
-	}
-
-	var err error
-
-	//
-	// lint extensions, configurations to the controllers
-	//---------------------------------------------------------
-	for category, controllerInterface := range independent.Handlers {
-		c := controllerInterface.(base.Interface)
-		var controllerConfig *handlerConfig.Handler
-		var controllerExtensions []string
-
-		controllerConfig, err = independent.config.HandlerByCategory(category)
-		if err != nil {
-			err = fmt.Errorf("'%s' registered in the service, no config found: %w", category, err)
-			goto closeContext
-		}
-
-		if err = c.SetLogger(independent.Logger.Child(controllerConfig.Id)); err != nil {
-			err = fmt.Errorf("c.SetLogger: %w", err)
-			goto closeContext
-		}
-		controllerExtensions = c.DepIds()
-		for _, extensionUrl := range controllerExtensions {
-			requiredExtension := independent.config.ExtensionByUrl(extensionUrl)
-			err = c.AddDepByService(requiredExtension)
-			if err != nil {
-				err = fmt.Errorf("c.AddDepByService: %w", err)
-				goto closeContext
-			}
-		}
-	}
-
-	// run extensions if they are needed.
-	if len(requiredExtensions) > 0 {
-		//for _, requiredExtension := range requiredExtensions {
-		// We don't check for the error, since preparing the config should do that already.
-		//dep, _ := independent.Context.Dep(requiredExtension)
-		//
-		//if err = independent.prepareExtension(dep); err != nil {
-		//	err = fmt.Errorf(`service.prepareExtension("%s"): %w`, requiredExtension, err)
-		//	goto closeContext
-		//}
-		//}
-	}
-
-	return nil
-
-	// error happened, close the orchestra
-closeContext:
-	if err == nil {
-		return fmt.Errorf("error is expected, it doesn't exist though")
-	}
-	return err
 }
 
 // generateConfig sends a signal to the context to generate a new configuration for this service.
