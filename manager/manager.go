@@ -22,6 +22,7 @@ const (
 	Units               = "units"
 	Handlers            = "handlers"             // returns handler configurations
 	HandlersByCategory  = "handlers-by-category" // returns the handler configurations by their category
+	HandlersByRule      = "handlers-by-rule"     // returns the handler configurations filtered by serviceConfig.Rule
 )
 
 // The Manager keeps all necessary parameters of the service.
@@ -234,12 +235,12 @@ func (m *Manager) onHandlers(req message.RequestInterface) message.ReplyInterfac
 	return req.Ok(params)
 }
 
-// onHandlers returns configuration of the handlers in this service.
+// onHandlersByCategory returns configuration of the handlers in this service.
 //
 // If this service is a destination, then the proxy will call this function.
 //
-// todo, over-write the auxiliary service, so that it will return from the destination.
-// todo, auxiliary service must keep the handlers in itself.
+// Todo, over-write the auxiliary service, so that it will return from the destination.
+// Todo, auxiliary service must keep the handlers in itself.
 func (m *Manager) onHandlersByCategory(req message.RequestInterface) message.ReplyInterface {
 	category, err := req.RouteParameters().StringValue("category")
 	if err != nil {
@@ -251,13 +252,43 @@ func (m *Manager) onHandlersByCategory(req message.RequestInterface) message.Rep
 		return req.Fail(fmt.Sprintf("m.handlers: %v", err))
 	}
 
-	filteredConfigs := make([]*handlerConfig.Handler, 0, len(handlerConfigs))
+	filteredConfigs := handlerConfig.ByCategory(handlerConfigs, category)
 
-	for i := range handlerConfigs {
-		h := handlerConfigs[i]
-		if h.Category == category {
-			filteredConfigs = append(filteredConfigs, h)
-		}
+	params := key_value.New().Set("handler_configs", filteredConfigs)
+	return req.Ok(params)
+}
+
+// onHandlersByRule returns a list of handler configurations filtered by the serviceConfig.Rule.
+func (m *Manager) onHandlersByRule(req message.RequestInterface) message.ReplyInterface {
+	raw, err := req.RouteParameters().NestedValue("rule")
+	if err != nil {
+		return req.Fail(fmt.Sprintf("req.RouteParameters().NestedValue('proxy_chain'): %v", err))
+	}
+
+	var rule serviceConfig.Rule
+	err = raw.Interface(&rule)
+	if err != nil {
+		return req.Fail(fmt.Sprintf("key_value.KeyValue('proxy_chain').Interface(): %v", err))
+	}
+
+	if !rule.IsValid() {
+		return req.Fail("the 'rule' parameter is not valid")
+	}
+
+	handlerConfigs, err := m.handlers()
+	if err != nil {
+		return req.Fail(fmt.Sprintf("m.handlers: %v", err))
+	}
+
+	if rule.IsService() {
+		params := key_value.New().Set("handler_configs", handlerConfigs)
+		return req.Ok(params)
+	}
+
+	filteredConfigs := make([]*handlerConfig.Handler, 0, len(handlerConfigs))
+	for i := range rule.Categories {
+		category := rule.Categories[i]
+		filteredConfigs = append(filteredConfigs, handlerConfig.ByCategory(handlerConfigs, category)...)
 	}
 
 	params := key_value.New().Set("handler_configs", filteredConfigs)
@@ -304,6 +335,9 @@ func (m *Manager) Start() error {
 	}
 	if err := m.Route(HandlersByCategory, m.onHandlersByCategory); err != nil {
 		return fmt.Errorf(`handler.Route("%s"): %w`, HandlersByCategory, err)
+	}
+	if err := m.Route(HandlersByRule, m.onHandlersByRule); err != nil {
+		return fmt.Errorf(`handler.Route("%s"): %w`, HandlersByRule, err)
 	}
 
 	if err := m.Start(); err != nil {

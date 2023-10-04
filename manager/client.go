@@ -129,7 +129,40 @@ func (c *Client) HandlersByCategory(category string) ([]*handlerConfig.Handler, 
 
 	rawConfigs, err := reply.ReplyParameters().NestedListValue("handler_configs")
 	if err != nil {
-		return nil, fmt.Errorf("reply.ReplyParameters().NestedKeyValueList('proxy_chains'): %w", err)
+		return nil, fmt.Errorf("reply.ReplyParameters().NestedKeyValueList('handler_configs'): %w", err)
+	}
+
+	configs := make([]*handlerConfig.Handler, len(rawConfigs))
+	for i, rawConfig := range rawConfigs {
+		var c handlerConfig.Handler
+		err = rawConfig.Interface(&c)
+		if err != nil {
+			return nil, fmt.Errorf("rawConfigs[%d].Interface: %w", i, err)
+		}
+
+		configs[i] = &c
+	}
+
+	return configs, nil
+}
+
+// The HandlersByRule method returns the handler configs that matches to the destination rule
+func (c *Client) HandlersByRule(rule *serviceConfig.Rule) ([]*handlerConfig.Handler, error) {
+	req := &message.Request{
+		Command:    Units,
+		Parameters: key_value.New().Set("rule", rule),
+	}
+	reply, err := c.Request(req)
+	if err != nil {
+		return nil, fmt.Errorf("c.Request: %w", err)
+	}
+	if !reply.IsOK() {
+		return nil, fmt.Errorf("reply error message: %s", reply.ErrorMessage())
+	}
+
+	rawConfigs, err := reply.ReplyParameters().NestedListValue("handler_configs")
+	if err != nil {
+		return nil, fmt.Errorf("reply.ReplyParameters().NestedKeyValueList('handler_configs'): %w", err)
 	}
 
 	configs := make([]*handlerConfig.Handler, len(rawConfigs))
