@@ -219,8 +219,8 @@ func (m *Manager) SetLogger(parent *log.Logger) error {
 	return nil
 }
 
-func (m *Manager) SetHandlerClients(clients []manager_client.Interface) {
-	m.handlerClients = append(m.handlerClients, clients...)
+func (m *Manager) SetHandlerManagers(clients []manager_client.Interface) {
+	m.handlerManagers = append(m.handlerManagers, clients...)
 }
 
 func (m *Manager) SetDeps(configs []*clientConfig.Client) {
