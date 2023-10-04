@@ -27,13 +27,13 @@ const (
 // Manage this service from other parts.
 type Manager struct {
 	base.Interface
-	serviceUrl     string
-	handlerClients []manager_client.Interface
-	deps           []*clientConfig.Client
-	ctx            context.Interface
-	blocker        **sync.WaitGroup // block the service
-	running        bool
-	config         *clientConfig.Client
+	serviceUrl      string
+	handlerManagers []manager_client.Interface
+	deps            []*clientConfig.Client
+	ctx             context.Interface
+	blocker         **sync.WaitGroup // block the service
+	running         bool
+	config          *clientConfig.Client
 }
 
 // New service with the parameters.
@@ -42,13 +42,13 @@ func New(ctx context.Interface, blocker **sync.WaitGroup, client *clientConfig.C
 	handler := syncReplier.New()
 
 	h := &Manager{
-		Interface:      handler,
-		ctx:            ctx,
-		serviceUrl:     client.ServiceUrl,
-		handlerClients: make([]manager_client.Interface, 0),
-		deps:           make([]*clientConfig.Client, 0),
-		blocker:        blocker,
-		config:         client,
+		Interface:       handler,
+		ctx:             ctx,
+		serviceUrl:      client.ServiceUrl,
+		handlerManagers: make([]manager_client.Interface, 0),
+		deps:            make([]*clientConfig.Client, 0),
+		blocker:         blocker,
+		config:          client,
 	}
 
 	managerConfig := HandlerConfig(client)
@@ -70,7 +70,7 @@ func New(ctx context.Interface, blocker **sync.WaitGroup, client *clientConfig.C
 // Todo It doesn't close the proxies, which it must close.
 func (m *Manager) Close() error {
 	// closing all handlers
-	for _, handlerClient := range m.handlerClients {
+	for _, handlerClient := range m.handlerManagers {
 		err := handlerClient.Close()
 		if err != nil {
 			return fmt.Errorf("handlerManagerClient('%s').Close: %v", handlerClient.Id(), err)

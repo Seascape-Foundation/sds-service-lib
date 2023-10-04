@@ -514,7 +514,7 @@ func (independent *Service) setHandlerClient(c base.Interface) error {
 	if err != nil {
 		return fmt.Errorf("manager_client.New('%s'): %w", c.Config().Category, err)
 	}
-	independent.manager.SetHandlerClients([]manager_client.Interface{handlerClient})
+	independent.manager.SetHandlerManagers([]manager_client.Interface{handlerClient})
 
 	return nil
 }
