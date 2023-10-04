@@ -20,8 +20,8 @@ const (
 	Close               = "close"
 	ProxyChainsByLastId = "proxy-chains-by-last-id"
 	Units               = "units"
-	Handlers            = "handlers" // returns handler configurations
-	HandlersByCategory  = "handler"  // returns the handler configurations by their category
+	Handlers            = "handlers"             // returns handler configurations
+	HandlersByCategory  = "handlers-by-category" // returns the handler configurations by their category
 )
 
 // The Manager keeps all necessary parameters of the service.
