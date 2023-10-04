@@ -28,7 +28,6 @@ const (
 type Manager struct {
 	base.Interface
 	serviceUrl     string
-	handlerManager manager_client.Interface
 	handlerClients []manager_client.Interface
 	deps           []*clientConfig.Client
 	ctx            context.Interface
@@ -54,12 +53,6 @@ func New(ctx context.Interface, blocker **sync.WaitGroup, client *clientConfig.C
 
 	managerConfig := HandlerConfig(client)
 	handler.SetConfig(managerConfig)
-
-	handlerManager, err := manager_client.New(managerConfig)
-	if err != nil {
-		return nil, fmt.Errorf("manager_client.New: %w", err)
-	}
-	h.handlerManager = handlerManager
 
 	return h, nil
 }
@@ -97,7 +90,12 @@ func (m *Manager) Close() error {
 		return fmt.Errorf("ctx.Close: %w", err)
 	}
 
-	err = m.handlerManager.Close()
+	managerConfig := HandlerConfig(m.config)
+	handlerManager, err := manager_client.New(managerConfig)
+	if err != nil {
+		return fmt.Errorf("manager_client.New: %w", err)
+	}
+	err = handlerManager.Close()
 	if err != nil {
 		return fmt.Errorf("handler.Close: %w", err)
 	}
