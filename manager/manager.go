@@ -12,7 +12,6 @@ import (
 	handlerConfig "github.com/ahmetson/handler-lib/config"
 	"github.com/ahmetson/handler-lib/manager_client"
 	syncReplier "github.com/ahmetson/handler-lib/sync_replier"
-	"github.com/ahmetson/log-lib"
 	"sync"
 )
 
@@ -209,14 +208,6 @@ func HandlerConfig(client *clientConfig.Client) *handlerConfig.Handler {
 		Port:           client.Port,
 		Id:             client.Id,
 	}
-}
-
-func (m *Manager) SetLogger(parent *log.Logger) error {
-	if err := m.SetLogger(parent); err != nil {
-		return fmt.Errorf("handler.SetLogger: %w", err)
-	}
-
-	return nil
 }
 
 func (m *Manager) SetHandlerManagers(clients []manager_client.Interface) {
