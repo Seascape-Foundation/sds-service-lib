@@ -70,10 +70,10 @@ func New(ctx context.Interface, blocker **sync.WaitGroup, client *clientConfig.C
 // Todo It doesn't close the proxies, which it must close.
 func (m *Manager) Close() error {
 	// closing all handlers
-	for _, handlerClient := range m.handlerManagers {
-		err := handlerClient.Close()
+	for _, h := range m.handlerManagers {
+		err := h.Close()
 		if err != nil {
-			return fmt.Errorf("handlerManagerClient('%s').Close: %v", handlerClient.Id(), err)
+			return fmt.Errorf("handlerManagers('%s').Close: %v", h.Id(), err)
 		}
 	}
 
