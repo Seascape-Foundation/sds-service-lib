@@ -21,6 +21,7 @@ const (
 	Close               = "close"
 	ProxyChainsByLastId = "proxy-chains-by-last-id"
 	Units               = "units"
+	Handlers            = "handlers" // returns handler configurations
 )
 
 // The Manager keeps all necessary parameters of the service.
@@ -176,6 +177,29 @@ func (m *Manager) onUnits(req message.RequestInterface) message.ReplyInterface {
 //// onProxyGenerated sets the proxy information
 //func (m *Manager) onProxyGenerated(req message.RequestInterface) message.ReplyInterface {
 
+// onHandlers returns configuration of the handlers in this service.
+//
+// If this service is a destination, then the proxy will call this function.
+//
+// todo, over-write the auxiliary service, so that it will return from the destination.
+// todo, auxiliary service must keep the handlers in itself.
+func (m *Manager) onHandlers(req message.RequestInterface) message.ReplyInterface {
+	handlerConfigs := make([]*handlerConfig.Handler, len(m.handlerManagers))
+
+	for i := range m.handlerManagers {
+		handlerManager := m.handlerManagers[i]
+		handlerConfig, err := handlerManager.Config()
+		if err != nil {
+			return req.Fail(fmt.Sprintf("m.handlerManagers[%d]: %v", i, err))
+		}
+
+		handlerConfigs[i] = handlerConfig
+	}
+
+	params := key_value.New().Set("handler_configs", handlerConfigs)
+	return req.Ok(params)
+}
+
 // HandlerConfig converts the client into the handler configuration
 func HandlerConfig(client *clientConfig.Client) *handlerConfig.Handler {
 	return &handlerConfig.Handler{
@@ -218,6 +242,9 @@ func (m *Manager) Start() error {
 	}
 	if err := m.Route(Units, m.onUnits); err != nil {
 		return fmt.Errorf(`handler.Route("%s"): %w`, Units, err)
+	}
+	if err := m.Route(Handlers, m.onHandlers); err != nil {
+		return fmt.Errorf(`handler.Route("%s"): %w`, Handlers, err)
 	}
 
 	if err := m.Start(); err != nil {
