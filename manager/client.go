@@ -149,7 +149,7 @@ func (c *Client) HandlersByCategory(category string) ([]*handlerConfig.Handler, 
 // The HandlersByRule method returns the handler configs that matches to the destination rule
 func (c *Client) HandlersByRule(rule *serviceConfig.Rule) ([]*handlerConfig.Handler, error) {
 	req := &message.Request{
-		Command:    Units,
+		Command:    HandlersByRule,
 		Parameters: key_value.New().Set("rule", rule),
 	}
 	reply, err := c.Request(req)
