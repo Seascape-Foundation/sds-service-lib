@@ -151,6 +151,10 @@ func (independent *Service) Id() string {
 }
 
 // SetProxyChain adds a proxy chain to the list of proxy chains to set.
+//
+// The proxies are managed by the proxy handler in the context.
+// This method creates a serviceConfig.ProxyChain.
+// Then send it to the proxy handler.
 func (independent *Service) SetProxyChain(params ...interface{}) error {
 	if len(params) < 2 || len(params) > 3 {
 		return fmt.Errorf("argument amount is invalid, either two or three arguments must be set")
@@ -320,6 +324,8 @@ func (independent *Service) lintConfig() error {
 // The prepareServiceConfig sets the configuration of this service and handlers.
 // If the configuration doesn't exist, generates the service and handler.
 // The returned configuration from the context is linted into service and handler.
+//
+// Important node. This method doesn't set the proxies or extensions.
 func (independent *Service) prepareServiceConfig() error {
 	configClient := independent.ctx.Config()
 
