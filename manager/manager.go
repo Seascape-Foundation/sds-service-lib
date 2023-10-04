@@ -21,6 +21,7 @@ const (
 	ProxyChainsByLastId = "proxy-chains-by-last-id"
 	Units               = "units"
 	Handlers            = "handlers" // returns handler configurations
+	HandlersByCategory  = "handler"  // returns the handler configurations by their category
 )
 
 // The Manager keeps all necessary parameters of the service.
@@ -200,6 +201,23 @@ func (m *Manager) onUnits(req message.RequestInterface) message.ReplyInterface {
 //	return req.Ok(params)
 //}
 
+// The handlers return the handler configurations
+func (m *Manager) handlers() ([]*handlerConfig.Handler, error) {
+	handlerConfigs := make([]*handlerConfig.Handler, len(m.handlerManagers))
+
+	for i := range m.handlerManagers {
+		handlerManager := m.handlerManagers[i]
+		c, err := handlerManager.Config()
+		if err != nil {
+			return nil, fmt.Errorf("m.handlerManagers[%d]: %w", i, err)
+		}
+
+		handlerConfigs[i] = c
+	}
+
+	return handlerConfigs, nil
+}
+
 // onHandlers returns configuration of the handlers in this service.
 //
 // If this service is a destination, then the proxy will call this function.
@@ -207,19 +225,42 @@ func (m *Manager) onUnits(req message.RequestInterface) message.ReplyInterface {
 // todo, over-write the auxiliary service, so that it will return from the destination.
 // todo, auxiliary service must keep the handlers in itself.
 func (m *Manager) onHandlers(req message.RequestInterface) message.ReplyInterface {
-	handlerConfigs := make([]*handlerConfig.Handler, len(m.handlerManagers))
-
-	for i := range m.handlerManagers {
-		handlerManager := m.handlerManagers[i]
-		c, err := handlerManager.Config()
-		if err != nil {
-			return req.Fail(fmt.Sprintf("m.handlerManagers[%d]: %v", i, err))
-		}
-
-		handlerConfigs[i] = c
+	handlerConfigs, err := m.handlers()
+	if err != nil {
+		return req.Fail(fmt.Sprintf("m.handlers: %v", err))
 	}
 
 	params := key_value.New().Set("handler_configs", handlerConfigs)
+	return req.Ok(params)
+}
+
+// onHandlers returns configuration of the handlers in this service.
+//
+// If this service is a destination, then the proxy will call this function.
+//
+// todo, over-write the auxiliary service, so that it will return from the destination.
+// todo, auxiliary service must keep the handlers in itself.
+func (m *Manager) onHandlersByCategory(req message.RequestInterface) message.ReplyInterface {
+	category, err := req.RouteParameters().StringValue("category")
+	if err != nil {
+		return req.Fail(fmt.Sprintf("req.RouteParameters().StringValue('category'): %v", err))
+	}
+
+	handlerConfigs, err := m.handlers()
+	if err != nil {
+		return req.Fail(fmt.Sprintf("m.handlers: %v", err))
+	}
+
+	filteredConfigs := make([]*handlerConfig.Handler, 0, len(handlerConfigs))
+
+	for i := range handlerConfigs {
+		h := handlerConfigs[i]
+		if h.Category == category {
+			filteredConfigs = append(filteredConfigs, h)
+		}
+	}
+
+	params := key_value.New().Set("handler_configs", filteredConfigs)
 	return req.Ok(params)
 }
 
@@ -260,6 +301,9 @@ func (m *Manager) Start() error {
 	}
 	if err := m.Route(Handlers, m.onHandlers); err != nil {
 		return fmt.Errorf(`handler.Route("%s"): %w`, Handlers, err)
+	}
+	if err := m.Route(HandlersByCategory, m.onHandlersByCategory); err != nil {
+		return fmt.Errorf(`handler.Route("%s"): %w`, HandlersByCategory, err)
 	}
 
 	if err := m.Start(); err != nil {

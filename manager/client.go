@@ -7,6 +7,7 @@ import (
 	serviceConfig "github.com/ahmetson/config-lib/service"
 	"github.com/ahmetson/datatype-lib/data_type/key_value"
 	"github.com/ahmetson/datatype-lib/message"
+	handlerConfig "github.com/ahmetson/handler-lib/config"
 )
 
 //
@@ -106,4 +107,41 @@ func (c *Client) Units(rule *serviceConfig.Rule) ([]*serviceConfig.Unit, error) 
 	}
 
 	return units, nil
+}
+
+// The HandlersByCategory returns the list of handlers filtered by the category
+func (c *Client) HandlersByCategory(category string) ([]*handlerConfig.Handler, error) {
+	if len(category) == 0 {
+		return nil, fmt.Errorf("the 'category' parameter can not be empty")
+	}
+
+	req := &message.Request{
+		Command:    HandlersByCategory,
+		Parameters: key_value.New().Set("category", category),
+	}
+	reply, err := c.Request(req)
+	if err != nil {
+		return nil, fmt.Errorf("c.Request: %w", err)
+	}
+	if !reply.IsOK() {
+		return nil, fmt.Errorf("reply error message: %s", reply.ErrorMessage())
+	}
+
+	rawConfigs, err := reply.ReplyParameters().NestedListValue("handler_configs")
+	if err != nil {
+		return nil, fmt.Errorf("reply.ReplyParameters().NestedKeyValueList('proxy_chains'): %w", err)
+	}
+
+	configs := make([]*handlerConfig.Handler, len(rawConfigs))
+	for i, rawConfig := range rawConfigs {
+		var c handlerConfig.Handler
+		err = rawConfig.Interface(&c)
+		if err != nil {
+			return nil, fmt.Errorf("rawUnits[%d].Interface: %w", i, err)
+		}
+
+		configs[i] = &c
+	}
+
+	return configs, nil
 }
