@@ -1,19 +1,17 @@
-// Package proxy defines the script that acts as the middleware
-package proxy
+package service
 
 import (
 	"fmt"
-	"github.com/ahmetson/service-lib"
 )
 
 // Proxy defines the parameters of the proxy service
 type Proxy struct {
-	*service.Service
+	*Service
 }
 
-// New proxy service returned
-func New() (*Proxy, error) {
-	independent, err := service.New()
+// NewProxy proxy service returned
+func NewProxy() (*Proxy, error) {
+	independent, err := New()
 	if err != nil {
 		return nil, fmt.Errorf("service.New: %w", err)
 	}
