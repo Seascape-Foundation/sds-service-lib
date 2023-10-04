@@ -25,15 +25,17 @@ const (
 )
 
 // The Manager keeps all necessary parameters of the service.
+// Manage this service from other parts.
 type Manager struct {
+	base.Interface
 	serviceUrl     string
-	handler        base.Interface // manage this service from other parts. it should be called before the orchestra runs
 	handlerManager manager_client.Interface
 	handlerClients []manager_client.Interface
 	deps           []*clientConfig.Client
 	ctx            context.Interface
 	blocker        **sync.WaitGroup // block the service
 	running        bool
+	config         *clientConfig.Client
 }
 
 type Client struct {
@@ -46,15 +48,16 @@ func New(ctx context.Interface, blocker **sync.WaitGroup, client *clientConfig.C
 	handler := syncReplier.New()
 
 	h := &Manager{
+		Interface:      handler,
 		ctx:            ctx,
-		handler:        handler,
 		serviceUrl:     client.ServiceUrl,
 		handlerClients: make([]manager_client.Interface, 0),
 		deps:           make([]*clientConfig.Client, 0),
 		blocker:        blocker,
+		config:         client,
 	}
 
-	managerConfig := h.Config(client)
+	managerConfig := HandlerConfig(client)
 	handler.SetConfig(managerConfig)
 
 	handlerManager, err := manager_client.New(managerConfig)
@@ -276,8 +279,11 @@ func (m *Manager) onUnits(req message.RequestInterface) message.ReplyInterface {
 	return req.Ok(params)
 }
 
-// Config of the manager
-func (m *Manager) Config(client *clientConfig.Client) *handlerConfig.Handler {
+//// onProxyGenerated sets the proxy information
+//func (m *Manager) onProxyGenerated(req message.RequestInterface) message.ReplyInterface {
+
+// HandlerConfig converts the client into the handler configuration
+func HandlerConfig(client *clientConfig.Client) *handlerConfig.Handler {
 	return &handlerConfig.Handler{
 		Type:           handlerConfig.SyncReplierType,
 		Category:       serviceConfig.ManagerCategory,
@@ -288,7 +294,7 @@ func (m *Manager) Config(client *clientConfig.Client) *handlerConfig.Handler {
 }
 
 func (m *Manager) SetLogger(parent *log.Logger) error {
-	if err := m.handler.SetLogger(parent); err != nil {
+	if err := m.SetLogger(parent); err != nil {
 		return fmt.Errorf("handler.SetLogger: %w", err)
 	}
 
@@ -307,20 +313,20 @@ func (m *Manager) SetDeps(configs []*clientConfig.Client) {
 // If it failed to run, then return an error.
 // The url request is the main service to which this orchestra belongs too.
 func (m *Manager) Start() error {
-	if err := m.handler.Route(Close, m.onClose); err != nil {
+	if err := m.Route(Close, m.onClose); err != nil {
 		return fmt.Errorf(`handler.Route("%s"): %w`, Close, err)
 	}
-	if err := m.handler.Route(Heartbeat, m.onHeartbeat); err != nil {
+	if err := m.Route(Heartbeat, m.onHeartbeat); err != nil {
 		return fmt.Errorf(`handler.Route("%s"): %w`, Heartbeat, err)
 	}
-	if err := m.handler.Route(ProxyChainsByLastId, m.onProxyChainsByLastProxy); err != nil {
+	if err := m.Route(ProxyChainsByLastId, m.onProxyChainsByLastProxy); err != nil {
 		return fmt.Errorf(`handler.Route("%s"): %w`, ProxyChainsByLastId, err)
 	}
-	if err := m.handler.Route(Units, m.onUnits); err != nil {
+	if err := m.Route(Units, m.onUnits); err != nil {
 		return fmt.Errorf(`handler.Route("%s"): %w`, Units, err)
 	}
 
-	if err := m.handler.Start(); err != nil {
+	if err := m.Start(); err != nil {
 		return fmt.Errorf("handler.Start: %w", err)
 	}
 
