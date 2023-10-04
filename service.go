@@ -476,10 +476,10 @@ func (independent *Service) prepareServiceConfig() error {
 	return nil
 }
 
-// The prepareProxyChains gets the list of proxy chains for this service.
+// The setProxyUnits gets the list of proxy chains for this service.
 // Then, it creates a proxy units.
 // todo if the extension is sending a ready command, then update the command list.
-func (independent *Service) prepareProxyChains() error {
+func (independent *Service) setProxyUnits() error {
 	proxyClient := independent.ctx.ProxyClient()
 	proxyChains, err := proxyClient.ProxyChainsByRuleUrl(independent.url)
 	if err != nil {
@@ -510,9 +510,9 @@ func (independent *Service) prepareProxyChains() error {
 	return nil
 }
 
-// prepareProxyChains prepares the proxy chains by fetching the proxies from the parent
+// setProxyUnits prepares the proxy chains by fetching the proxies from the parent
 // and storing them in this service
-func (auxiliary *Auxiliary) prepareProxyChains() error {
+func (auxiliary *Auxiliary) setProxyUnits() error {
 	parentClient := auxiliary.ParentManager
 	proxyChains, err := parentClient.ProxyChainsByLastProxy(auxiliary.id)
 	if err != nil {
@@ -729,8 +729,8 @@ func (independent *Service) Start() (*sync.WaitGroup, error) {
 	}
 
 	// get the proxies from the proxy chain for this service.
-	if err = independent.prepareProxyChains(); err != nil {
-		err = fmt.Errorf("independent.prepareProxyChains: %w", err)
+	if err = independent.setProxyUnits(); err != nil {
+		err = fmt.Errorf("independent.setProxyUnits: %w", err)
 		goto errOccurred
 	}
 
