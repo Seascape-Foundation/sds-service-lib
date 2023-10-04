@@ -175,6 +175,30 @@ func (m *Manager) onUnits(req message.RequestInterface) message.ReplyInterface {
 
 //// onProxyGenerated sets the proxy information
 //func (m *Manager) onProxyGenerated(req message.RequestInterface) message.ReplyInterface {
+//	raw, err := req.RouteParameters().NestedValue("rule")
+//	if err != nil {
+//		return req.Fail(fmt.Sprintf("req.RouteParameters().NestedValue('proxy_chain'): %v", err))
+//	}
+//
+//	var rule serviceConfig.Rule
+//	err = raw.Interface(&rule)
+//	if err != nil {
+//		return req.Fail(fmt.Sprintf("key_value.KeyValue('proxy_chain').Interface(): %v", err))
+//	}
+//
+//	if !rule.IsValid() {
+//		return req.Fail("the 'rule' parameter is not valid")
+//	}
+//
+//	proxyClient := m.ctx.ProxyClient()
+//	units, err := proxyClient.Units(&rule)
+//	if err != nil {
+//		return req.Fail(fmt.Sprintf("proxyClient.Units: %v", err))
+//	}
+//
+//	params := key_value.New().Set("units", units)
+//	return req.Ok(params)
+//}
 
 // onHandlers returns configuration of the handlers in this service.
 //
