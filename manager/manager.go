@@ -188,12 +188,12 @@ func (m *Manager) onHandlers(req message.RequestInterface) message.ReplyInterfac
 
 	for i := range m.handlerManagers {
 		handlerManager := m.handlerManagers[i]
-		handlerConfig, err := handlerManager.Config()
+		c, err := handlerManager.Config()
 		if err != nil {
 			return req.Fail(fmt.Sprintf("m.handlerManagers[%d]: %v", i, err))
 		}
 
-		handlerConfigs[i] = handlerConfig
+		handlerConfigs[i] = c
 	}
 
 	params := key_value.New().Set("handler_configs", handlerConfigs)
