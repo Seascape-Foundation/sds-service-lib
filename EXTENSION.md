@@ -14,7 +14,7 @@ Get `service-lib`, `common-lib` modules:
 
 ```sh
 go get github.com/ahmetson/service-lib
-go get github.com/ahmetson/datatype-lib
+go get github.com/ahmetson/common-lib
 go mod vendor
 ```
 
@@ -119,10 +119,10 @@ package handler
 
 import (
 	"github.com/ahmetson/client-lib/command"
-	"github.com/ahmetson/datatype-lib/message"
+	"github.com/ahmetson/common-lib/message"
 	"github.com/ahmetson/service-lib/remote"
 	log "github.com/ahmetson/log-lib"
-	"github.com/ahmetson/datatype-lib/data_type/key_value"
+	"github.com/ahmetson/common-lib/data_type/key_value"
 )
 
 // counter is set in the memory for development purpose.
