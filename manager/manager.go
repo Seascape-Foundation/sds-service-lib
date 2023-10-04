@@ -30,6 +30,7 @@ const (
 type Manager struct {
 	base.Interface
 	serviceUrl      string
+	serviceId       string
 	handlerManagers []manager_client.Interface
 	deps            []*clientConfig.Client
 	ctx             context.Interface
@@ -40,13 +41,14 @@ type Manager struct {
 
 // New service with the parameters.
 // Parameter order: id, url, context type
-func New(ctx context.Interface, blocker **sync.WaitGroup, client *clientConfig.Client) (*Manager, error) {
+func New(ctx context.Interface, serviceId string, blocker **sync.WaitGroup, client *clientConfig.Client) (*Manager, error) {
 	handler := syncReplier.New()
 
 	h := &Manager{
 		Interface:       handler,
 		ctx:             ctx,
 		serviceUrl:      client.ServiceUrl,
+		serviceId:       serviceId,
 		handlerManagers: make([]manager_client.Interface, 0),
 		deps:            make([]*clientConfig.Client, 0),
 		blocker:         blocker,
