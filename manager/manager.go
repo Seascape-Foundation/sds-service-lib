@@ -82,14 +82,6 @@ func (m *Manager) Close() error {
 		}
 	}
 
-	// closing all dependencies
-	depClient := m.ctx.DepManager()
-	for _, c := range m.deps {
-		if err := depClient.CloseDep(c); err != nil {
-			return fmt.Errorf("depClient.CloseDep('%s'): %v", c.Id, err)
-		}
-	}
-
 	err := m.ctx.Close()
 	if err != nil {
 		return fmt.Errorf("ctx.Close: %w", err)
@@ -178,7 +170,7 @@ func (m *Manager) onUnits(req message.RequestInterface) message.ReplyInterface {
 	return req.Ok(params)
 }
 
-// onProxyConfigSet sets the proxy information for a rule as the proxy is set it's configuration
+// onProxyConfigSet sets the proxy information for a rule as the proxy is set the configuration
 func (m *Manager) onProxyConfigSet(req message.RequestInterface) message.ReplyInterface {
 	raw, err := req.RouteParameters().NestedValue("rule")
 	if err != nil {

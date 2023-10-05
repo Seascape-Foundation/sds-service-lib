@@ -44,8 +44,7 @@ type Service struct {
 //
 // It will also create the context internally and start it.
 func New() (*Service, error) {
-	id := ""
-	url := ""
+	var id, url string
 
 	// let's validate the parameters of the service
 	if arg.FlagExist(flag.IdFlag) {
@@ -354,7 +353,7 @@ func (independent *Service) setConfig() error {
 
 // The setProxyUnits gets the list of proxy chains for this service.
 // Then, it creates a proxy units.
-// todo if the extension is sending a ready command, then update the command list.
+// Todo if the extension is sending a ready command, then update the command list.
 func (independent *Service) setProxyUnits() error {
 	proxyClient := independent.ctx.ProxyClient()
 	proxyChains, err := proxyClient.ProxyChainsByRuleUrl(independent.url)
