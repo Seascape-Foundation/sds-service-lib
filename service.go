@@ -356,7 +356,7 @@ func (independent *Service) setConfig() error {
 // Todo if the extension is sending a ready command, then update the command list.
 func (independent *Service) setProxyUnits() error {
 	proxyClient := independent.ctx.ProxyClient()
-	proxyChains, err := proxyClient.ProxyChainsByRuleUrl(independent.url)
+	proxyChains, err := proxyClient.ProxyChains()
 	if err != nil {
 		return fmt.Errorf("proxyClient.ProxyChainsByRuleUrl: %w", err)
 	}
