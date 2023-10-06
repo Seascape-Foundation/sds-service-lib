@@ -369,7 +369,7 @@ func (m *Manager) Start() error {
 		return fmt.Errorf(`handler.Route("%s"): %w`, ProxyConfigSet, err)
 	}
 
-	if err := m.Start(); err != nil {
+	if err := m.Interface.Start(); err != nil {
 		return fmt.Errorf("handler.Start: %w", err)
 	}
 
