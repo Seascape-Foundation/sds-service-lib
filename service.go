@@ -184,7 +184,7 @@ func (independent *Service) SetProxyChain(params ...interface{}) error {
 
 	proxyClient := independent.ctx.ProxyClient()
 	if err := proxyClient.Set(proxyChain); err != nil {
-		return fmt.Errorf("c.Set: %w", err)
+		return fmt.Errorf("independent.ctx.Set('proxyChain'): %w", err)
 	}
 
 	return nil
