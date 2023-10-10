@@ -314,6 +314,29 @@ func (independent *Service) setConfig() error {
 	return nil
 }
 
+func (independent *Service) setProxyUnitsBy(dest *serviceConfig.Rule) error {
+	proxyClient := independent.ctx.ProxyClient()
+
+	if dest.IsRoute() {
+		units := independent.unitsByRouteRule(dest)
+		if err := proxyClient.SetUnits(dest, units); err != nil {
+			return fmt.Errorf("proxyClient.SetUnits: %w", err)
+		}
+	} else if dest.IsHandler() {
+		units := independent.unitsByHandlerRule(dest)
+		if err := proxyClient.SetUnits(dest, units); err != nil {
+			return fmt.Errorf("proxyClient.SetUnits: %w", err)
+		}
+	} else if dest.IsService() {
+		units := independent.unitsByServiceRule(dest)
+		if err := proxyClient.SetUnits(dest, units); err != nil {
+			return fmt.Errorf("proxyClient.SetUnits: %w", err)
+		}
+	}
+
+	return nil
+}
+
 // The setProxyUnits gets the list of proxy chains for this service.
 // Then, it creates a proxy units.
 // Todo if the extension is sending a ready command, then update the command list.
@@ -327,21 +350,8 @@ func (independent *Service) setProxyUnits() error {
 	// set the proxy destination units for each rule
 	for _, proxyChain := range proxyChains {
 		dest := proxyChain.Destination
-		if dest.IsRoute() {
-			units := independent.unitsByRouteRule(dest)
-			if err := proxyClient.SetUnits(dest, units); err != nil {
-				return fmt.Errorf("proxyClient.SetUnits: %w", err)
-			}
-		} else if dest.IsHandler() {
-			units := independent.unitsByHandlerRule(dest)
-			if err := proxyClient.SetUnits(dest, units); err != nil {
-				return fmt.Errorf("proxyClient.SetUnits: %w", err)
-			}
-		} else if dest.IsService() {
-			units := independent.unitsByServiceRule(dest)
-			if err := proxyClient.SetUnits(dest, units); err != nil {
-				return fmt.Errorf("proxyClient.SetUnits: %w", err)
-			}
+		if err := independent.setProxyUnitsBy(dest); err != nil {
+			return fmt.Errorf("independent.setProxyUnitsBy(rule='%v'): %w", dest, err)
 		}
 	}
 
