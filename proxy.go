@@ -7,6 +7,7 @@ import (
 	handlerConfig "github.com/ahmetson/handler-lib/config"
 	"github.com/ahmetson/handler-lib/replier"
 	"github.com/ahmetson/handler-lib/sync_replier"
+	"slices"
 	"sync"
 )
 
@@ -52,6 +53,15 @@ func (proxy *Proxy) setProxyUnits() error {
 	for _, proxyChain := range proxyChains {
 		// the last proxy in the list is removed as its this parent
 		rule := proxyChain.Destination
+
+		// For proxy chains set specifically for this proxy, then simply get the proxies
+		if slices.Contains(rule.Urls, proxy.url) {
+			err := proxy.setProxyUnitsBy(rule)
+			if err != nil {
+				return fmt.Errorf("proxy.setProxyUnitsBy(rule='%v'): %w", rule, err)
+			}
+			continue
+		}
 
 		units, err := parentClient.Units(rule)
 		if err != nil {
