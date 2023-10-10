@@ -170,7 +170,7 @@ func (independent *Service) SetProxyChain(params ...interface{}) error {
 		}
 	} else {
 		var err error
-		proxyChain, err = serviceConfig.NewProxyChain(params)
+		proxyChain, err = serviceConfig.NewProxyChain(params...)
 		if err != nil {
 			return fmt.Errorf("serviceConfig.NewProxyChain: %w", err)
 		}
