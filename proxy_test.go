@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/suite"
 	win "os"
 	"testing"
+	"time"
 )
 
 // Define the suite, and absorb the built-in basic suite
@@ -91,6 +92,7 @@ func (test *TestProxySuite) Test_10_NewProxy() {
 	// Clean out
 	DeleteLastFlags(3)
 	s().NoError(proxy.ctx.Close())
+	time.Sleep(time.Millisecond * 100)
 }
 
 // Test_11_Proxy_SetHandler tests that SetHandler is not invokable in the proxy.
@@ -120,6 +122,7 @@ func (test *TestProxySuite) Test_11_Proxy_SetHandler() {
 	// Clean out
 	DeleteLastFlags(3)
 	s().NoError(proxy.ctx.Close())
+	time.Sleep(time.Millisecond * 100)
 }
 
 //// Test_12_Proxy_lintProxyChain checks syncing the proxy chain with a parent
