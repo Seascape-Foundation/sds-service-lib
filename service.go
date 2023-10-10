@@ -25,7 +25,6 @@ import (
 
 // Service keeps all necessary parameters of the service.
 type Service struct {
-	config             *serviceConfig.Service
 	ctx                context.Interface // context handles the configuration and dependencies
 	Handlers           key_value.KeyValue
 	RequiredExtensions key_value.KeyValue
@@ -238,10 +237,8 @@ func (independent *Service) generateConfig() (*serviceConfig.Service, error) {
 
 	// Some handlers were generated and added into generated service config.
 	// Notify the config engine to update the service.
-	if len(independent.Handlers) > 0 {
-		if err := configClient.SetService(generatedConfig); err != nil {
-			return nil, fmt.Errorf("configClient.SetService('generated'): %w", err)
-		}
+	if err := configClient.SetService(generatedConfig); err != nil {
+		return nil, fmt.Errorf("configClient.SetService('generated'): %w", err)
 	}
 
 	return generatedConfig, nil
@@ -285,8 +282,6 @@ func (independent *Service) lintConfig() error {
 		}
 	}
 
-	independent.config = returnedService
-
 	return nil
 }
 
@@ -305,11 +300,10 @@ func (independent *Service) setConfig() error {
 	}
 
 	if !exist {
-		generatedConfig, err := independent.generateConfig()
+		_, err := independent.generateConfig()
 		if err != nil {
 			return fmt.Errorf("generateConfig: %w", err)
 		}
-		independent.config = generatedConfig
 
 		return nil
 	}
@@ -461,10 +455,7 @@ func (independent *Service) unitsByServiceRule(rule *serviceConfig.Rule) []*serv
 //
 // This function lints manager.Manager with ctx.
 func (independent *Service) newManager() error {
-	if independent.config == nil {
-		return fmt.Errorf("independent.config is nill")
-	}
-	m, err := manager.New(independent.ctx, independent.id, &independent.blocker, independent.config.Manager)
+	m, err := manager.New(independent.ctx, independent.id, &independent.blocker)
 	if err != nil {
 		return fmt.Errorf("manager.New: %w", err)
 	}

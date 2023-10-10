@@ -42,21 +42,30 @@ type Manager struct {
 
 // New service with the parameters.
 // Parameter order: id, url, context type
-func New(ctx context.Interface, serviceId string, blocker **sync.WaitGroup, client *clientConfig.Client) (*Manager, error) {
+func New(ctx context.Interface, serviceId string, blocker **sync.WaitGroup) (*Manager, error) {
+	configClient := ctx.Config()
+	returnedConfig, err := configClient.Service(serviceId)
+	if err != nil {
+		return nil, fmt.Errorf("ctx.Config().Service('%s'): %w", serviceId, err)
+	}
+	if returnedConfig.Manager == nil {
+		return nil, fmt.Errorf("ctx.Config().Service('%s'): Manager field is nil", serviceId)
+	}
+
 	handler := syncReplier.New()
 
 	h := &Manager{
 		Interface:       handler,
 		ctx:             ctx,
-		serviceUrl:      client.ServiceUrl,
+		serviceUrl:      returnedConfig.Url,
 		serviceId:       serviceId,
 		handlerManagers: make([]manager_client.Interface, 0),
 		deps:            make([]*clientConfig.Client, 0),
 		blocker:         blocker,
-		config:          client,
+		config:          returnedConfig.Manager,
 	}
 
-	managerConfig := HandlerConfig(client)
+	managerConfig := HandlerConfig(returnedConfig.Manager)
 	handler.SetConfig(managerConfig)
 
 	return h, nil
