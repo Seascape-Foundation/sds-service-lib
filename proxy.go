@@ -110,6 +110,9 @@ func (proxy *Proxy) lintProxyChain() error {
 		return nil
 	}
 
+	// the rule will be stored in the proxy handler manager
+	proxy.rule = nil
+
 	preLast := len(proxyChain.Proxies) - 1
 	proxies := make([]*service.Proxy, 0, preLast)
 	proxies = append(proxies, proxyChain.Proxies[:preLast]...)
