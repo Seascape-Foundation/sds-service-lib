@@ -133,12 +133,6 @@ func (independent *Service) SetHandler(category string, controller base.Interfac
 	independent.Handlers.Set(category, controller)
 }
 
-// SetTypeByService overwrites the type from the extended service.
-// Proxy and Extension calls this function.
-func (independent *Service) SetTypeByService(newType serviceConfig.Type) {
-	independent.Type = newType
-}
-
 // Url returns the url of the service source code
 func (independent *Service) Url() string {
 	return independent.url
@@ -239,7 +233,7 @@ func (independent *Service) requiredControllerExtensions() []string {
 	return extensions
 }
 
-// generateConfig sends a signal to the context to generate a new configuration for this service.
+// The generateConfig sends a signal to the context to generate a new configuration for this service.
 // The method requests multiple commands. One command to generate a service configuration.
 // Then a request to generate a handler configurations.
 //
