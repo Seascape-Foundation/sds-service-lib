@@ -51,28 +51,33 @@ func (proxy *Proxy) setProxyUnits() error {
 	// set the proxy destination units for each rule
 	for _, proxyChain := range proxyChains {
 		// the last proxy in the list is removed as its this parent
-		proxyChain.Proxies = proxyChain.Proxies[:len(proxyChain.Proxies)-1]
-		if len(proxyChain.Proxies) > 0 {
-			err := proxyClient.Set(proxyChain)
-			if err != nil {
-				return fmt.Errorf("proxyClient.Set: %w", err)
-			}
-		}
-
 		rule := proxyChain.Destination
+
 		units, err := parentClient.Units(rule)
 		if err != nil {
-			return fmt.Errorf("parentClient.Units: %w", err)
+			return fmt.Errorf("parentClient.Units('%v'): %w", rule, err)
 		}
 		if err := proxyClient.SetUnits(rule, units); err != nil {
-			return fmt.Errorf("proxyClient.SetUnits: %w", err)
+			return fmt.Errorf("proxyClient.SetUnits('%v'): %w", rule, err)
+		}
+	}
+
+	if proxy.rule != nil {
+		rule := proxy.rule
+
+		units, err := parentClient.Units(rule)
+		if err != nil {
+			return fmt.Errorf("parentClient.Units('%v'): %w", rule, err)
+		}
+		if err := proxyClient.SetUnits(rule, units); err != nil {
+			return fmt.Errorf("proxyClient.SetUnits('%v'): %w", rule, err)
 		}
 	}
 
 	return nil
 }
 
-// The lintProxyChain method fetches the proxy url from the parent.
+// The lintProxyChain method fetches the proxy parameters from the parent.
 // Then set it in the proxy context.
 // Todo, make sure to listen for the proxy parameters from the parent by a loop.
 func (proxy *Proxy) lintProxyChain() error {
@@ -98,6 +103,8 @@ func (proxy *Proxy) lintProxyChain() error {
 	proxies = append(proxies, proxyChain.Proxies[:preLast]...)
 	proxyChain.Proxies = proxies
 
+	// Add to the proxy client queue the proxy chain.
+	// When the proxy will start the base service, the proxy handler will fetch it.
 	err = proxy.SetProxyChain(proxyChain)
 	if err != nil {
 		return fmt.Errorf("proxy.SetProxyChain(rule='%v', id='%s'): %w", proxyChain.Destination, proxy.id, err)
