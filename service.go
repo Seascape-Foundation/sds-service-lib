@@ -567,13 +567,17 @@ func (independent *Service) Start() (*sync.WaitGroup, error) {
 	}
 
 	independent.ctx.SetService(independent.id, independent.url)
-	if err = independent.ctx.StartDepManager(); err != nil {
-		err = fmt.Errorf("ctx.StartDepManager: %w", err)
-		goto errOccurred
+	if !independent.ctx.IsDepManagerRunning() {
+		if err = independent.ctx.StartDepManager(); err != nil {
+			err = fmt.Errorf("ctx.StartDepManager: %w", err)
+			goto errOccurred
+		}
 	}
-	if err = independent.ctx.StartProxyHandler(); err != nil {
-		err = fmt.Errorf("ctx.StartProxyHandler: %w", err)
-		goto errOccurred
+	if !independent.ctx.IsProxyHandlerRunning() {
+		if err = independent.ctx.StartProxyHandler(); err != nil {
+			err = fmt.Errorf("ctx.StartProxyHandler: %w", err)
+			goto errOccurred
+		}
 	}
 
 	if err = independent.newManager(); err != nil {
