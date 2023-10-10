@@ -39,10 +39,6 @@ type TestAuxiliarySuite struct {
 	handlerCategory   string
 }
 
-func DeleteLastFlags(amount int) {
-	win.Args = win.Args[:len(win.Args)-amount]
-}
-
 func (test *TestAuxiliarySuite) SetupTest() {
 	s := test.Suite.Require
 
