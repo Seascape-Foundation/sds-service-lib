@@ -169,7 +169,9 @@ func (test *TestServiceSuite) externalClient(hConfig *handlerConfig.Handler) *cl
 func (test *TestServiceSuite) managerClient() *client.Socket {
 	s := test.Suite.Require
 
-	managerConfig := test.service.config.Manager
+	createdConfig, err := test.service.ctx.Config().Service(test.id)
+	s().NoError(err)
+	managerConfig := createdConfig.Manager
 	managerConfig.UrlFunc(clientConfig.Url)
 	managerClient, err := client.New(managerConfig)
 	s().NoError(err)
@@ -257,14 +259,8 @@ func (test *TestServiceSuite) Test_13_prepareConfig() {
 
 	test.newService()
 
-	// by default no configuration
-	s().Nil(test.service.config)
-
 	// It should call the test.service.lintConfig
 	s().NoError(test.service.setConfig())
-
-	// Config must be set
-	s().NotNil(test.service.config)
 
 	test.closeService()
 }
@@ -342,7 +338,9 @@ func (test *TestServiceSuite) Test_16_managerRequest() {
 	time.Sleep(time.Millisecond * 100)
 
 	// test sending a command to the manager
-	externalConfig := test.service.config.Manager
+	createdConfig, err := test.service.ctx.Config().Service(test.id)
+	s().NoError(err)
+	externalConfig := createdConfig.Manager
 	externalConfig.UrlFunc(clientConfig.Url)
 	externalClient, err := client.New(externalConfig)
 	s().NoError(err)
@@ -358,7 +356,7 @@ func (test *TestServiceSuite) Test_16_managerRequest() {
 	time.Sleep(time.Millisecond * 100)
 
 	// make sure that context is not running
-	s().False(test.service.ctx.Running())
+	s().False(test.service.ctx.IsRunning())
 
 	// clean out
 	test.service = nil
@@ -439,7 +437,7 @@ func (test *TestServiceSuite) Test_18_Service_unitsByRouteRule() {
 	units = test.service.unitsByRouteRule(rule)
 	s().Len(units, 2)
 
-	// let's say, we have two handlers, in this case search for commands in all categories
+	// let's say; we have two handlers, in this case search for commands in all categories
 	syncReplier := sync_replier.New()
 	s().NoError(syncReplier.Route(test.cmd1, test.defaultHandleFunc))
 	inprocConfig := handlerConfig.NewInternalHandler(handlerConfig.SyncReplierType, category2)
@@ -502,7 +500,7 @@ func (test *TestServiceSuite) Test_19_Service_unitsByHandlerRule() {
 	// Excluding the command must not return them as a unit
 	rule.ExcludeCommands(test.cmd1)
 	units = test.service.unitsByHandlerRule(rule)
-	s().Len(units, 1) // the test.cmd1 exists in two handlers, cmd2 from first handler must be returned
+	s().Len(units, 1) // the test.cmd1 exists in two handlers, cmd2 from the first handler must be returned
 
 	rule.ExcludeCommands(cmd2)
 	units = test.service.unitsByHandlerRule(rule)
