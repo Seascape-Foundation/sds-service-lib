@@ -90,6 +90,7 @@ func (m *Manager) Close() error {
 			return fmt.Errorf("handlerManagers('%s').Close: %v", h.Id(), err)
 		}
 	}
+	m.handlerManagers = make([]manager_client.Interface, 0)
 
 	err := m.ctx.Close()
 	if err != nil {
