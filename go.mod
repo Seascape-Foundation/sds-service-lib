@@ -10,8 +10,6 @@ replace github.com/ahmetson/datatype-lib => D:/sds/datatype-lib
 
 replace github.com/ahmetson/client-lib => D:/sds/client-lib
 
-replace github.com/ahmetson/dev-lib => D:/sds/dev-lib
-
 replace github.com/ahmetson/os-lib => D:/sds/os-lib
 
 require (
@@ -27,8 +25,6 @@ require (
 )
 
 replace github.com/ahmetson/dev-lib => D:/sds/dev-lib
-
-require github.com/ahmetson/service-lib v0.0.0-20230927211521-86174c68ee90
 
 require (
 	github.com/Microsoft/go-winio v0.6.1 // indirect
@@ -76,7 +72,6 @@ require (
 	golang.org/x/net v0.15.0 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
 require (
@@ -84,8 +79,6 @@ require (
 	github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2 // indirect
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/go-git/go-git/v5 v5.8.1 // indirect
-	github.com/joho/godotenv v1.5.1 // indirect
 	github.com/pebbe/zmq4 v1.2.10 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	golang.org/x/crypto v0.13.0 // indirect
