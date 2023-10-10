@@ -150,8 +150,22 @@ func (independent *Service) SetProxyChain(params ...interface{}) error {
 	if len(params) < 2 || len(params) > 3 {
 		return fmt.Errorf("argument amount is invalid, either two or three arguments must be set")
 	}
-	if independent.ctx == nil || independent.ctx.ProxyClient() == nil {
-		return fmt.Errorf("context or proxy client are not set")
+	if independent.ctx == nil || !independent.ctx.IsConfigRunning() {
+		return fmt.Errorf("context or config engine is not running")
+	}
+
+	if !independent.ctx.IsProxyHandlerRunning() {
+		independent.ctx.SetService(independent.id, independent.url)
+
+		err := independent.ctx.StartDepManager()
+		if err != nil {
+			return fmt.Errorf("ctx.StartDepManager: %w", err)
+		}
+
+		err = independent.ctx.StartProxyHandler()
+		if err != nil {
+			return fmt.Errorf("ctx.StartProxyHandler: %w", err)
+		}
 	}
 
 	var proxyChain *serviceConfig.ProxyChain
