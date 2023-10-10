@@ -37,7 +37,6 @@ type Service struct {
 }
 
 // New service.
-// Requires url and id.
 // The url and id could be passed as flag.IdFlag, flag.UrlFlag.
 // Or url and id could be passed as environment variable flag.IdEnv, flag.UrlEnv.
 //

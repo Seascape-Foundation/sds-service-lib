@@ -13,6 +13,7 @@ import (
 // Proxy defines the parameters of the proxy parent
 type Proxy struct {
 	*Auxiliary
+	rule *service.Rule // set it if this proxy is first in the chain
 }
 
 // NewProxy proxy parent returned
@@ -24,7 +25,7 @@ func NewProxy() (*Proxy, error) {
 
 	auxiliary.Type = service.ProxyType
 
-	return &Proxy{auxiliary}, nil
+	return &Proxy{auxiliary, nil}, nil
 }
 
 // SetHandler is disabled as the proxy returns them from the parent
@@ -88,7 +89,8 @@ func (proxy *Proxy) lintProxyChain() error {
 		return fmt.Errorf("parentManager.ProxyChainsByLastProxy(id='%s'): proxy chain is not valid", proxy.id)
 	}
 	if len(proxyChain.Proxies) == 0 {
-		return fmt.Errorf("parentManager.ProxyChainsByLastProxy(id='%s'): np proxies were given", proxy.id)
+		proxy.rule = proxyChain.Destination
+		return nil
 	}
 
 	preLast := len(proxyChain.Proxies) - 1
@@ -104,53 +106,87 @@ func (proxy *Proxy) lintProxyChain() error {
 	return nil
 }
 
+// For now, this method supports one rule, as the proxies support one destination for now.
+func (proxy *Proxy) destination() (*service.Rule, error) {
+	if proxy.rule != nil {
+		return proxy.rule, nil
+	}
+
+	proxyClient := proxy.ctx.ProxyClient()
+	proxyChains, err := proxyClient.ProxyChains()
+	if err != nil {
+		return nil, fmt.Errorf("proxyClient.ProxyChainsByRuleUrl: %w", err)
+	}
+	if len(proxyChains) == 0 {
+		return nil, fmt.Errorf("proxyClient.ProxyChains: 0 proxy chains")
+	}
+
+	return proxyChains[0].Destination, nil
+}
+
 // The lintHandlers method fetches the handlers from the parent.
-// Then set the handlers in the proxy parent.
+// Based on the handlers, it creates this proxy's handlers.
 //
 // Todo handlers must route to the proxy.RequestHandler.
 // Todo, make sure to listen for the proxy parameters from the parent by a loop.
 func (proxy *Proxy) lintHandlers() error {
-	proxyClient := proxy.ctx.ProxyClient()
-	proxyChains, err := proxyClient.ProxyChains()
+	destination, err := proxy.destination()
 	if err != nil {
-		return fmt.Errorf("proxyClient.ProxyChainsByRuleUrl: %w", err)
+		return fmt.Errorf("proxy.destination: %w", err)
 	}
 
-	for i := range proxyChains {
-		destination := proxyChains[i].Destination
+	handlerConfigs, err := proxy.ParentManager.HandlersByRule(destination)
+	if err != nil {
+		return fmt.Errorf("proxy.ParentManager.HandlersByRule(rule='%v', parentId='%s'): %w", destination, proxy.id, err)
+	}
+	if len(handlerConfigs) == 0 {
+		return fmt.Errorf("proxy.ParentManager.HandlersByRule(rule='%v', parentId='%s'): no handler configs", destination, proxy.id)
+	}
 
-		handlerConfigs, err := proxy.ParentManager.HandlersByRule(destination)
-		if err != nil {
-			return fmt.Errorf("proxy.ParentManager.HandlersByRule(rule='%v', id='%s'): %w", destination, proxy.id, err)
+	for i := range handlerConfigs {
+		var h base.Interface
+		if handlerConfigs[i].Type == handlerConfig.SyncReplierType {
+			h = sync_replier.New()
+		} else if handlerConfigs[i].Type == handlerConfig.ReplierType {
+			h = replier.New()
+		} else {
+			return fmt.Errorf("the handler type '%s' not supported for proxy", handlerConfigs[i].Type)
 		}
-		if len(handlerConfigs) == 0 {
-			return fmt.Errorf("proxy.ParentManager.HandlersByRule(rule='%v', id='%s'): no handler configs", destination, proxy.id)
-		}
-
-		for i := range handlerConfigs {
-			var h base.Interface
-			if handlerConfigs[i].Type == handlerConfig.SyncReplierType {
-				h = sync_replier.New()
-			} else if handlerConfigs[i].Type == handlerConfig.ReplierType {
-				h = replier.New()
-			} else {
-				return fmt.Errorf("the handler type '%s' not supported for proxy", handlerConfigs[i].Type)
-			}
-			// todo use the proxy category when generating a proxy id
-			// it needs to over-write the generateConfig method of the parent to set a new id.
-			proxy.SetHandler(handlerConfigs[i].Category, h)
-		}
+		// todo use the proxy category when generating a proxy parentId
+		// it needs to over-write the generateConfig method of the parent to set a new parentId.
+		proxy.SetHandler(handlerConfigs[i].Category, h)
 	}
 
 	return nil
 }
 
-// Start the proxy
+// Start the proxy.
 //
 // Proxy can start without the parent.
 // And when a parent starts, it will fetch the parameters.
 // Todo make sure that proxy chain update in a live mode affects the Service.
 func (proxy *Proxy) Start() (*sync.WaitGroup, error) {
+	proxy.ctx.SetService(proxy.id, proxy.url)
+	if !proxy.ctx.IsDepManagerRunning() {
+		if err := proxy.ctx.StartDepManager(); err != nil {
+			err = fmt.Errorf("ctx.StartDepManager: %w", err)
+			if closeErr := proxy.ctx.Close(); closeErr != nil {
+				return nil, fmt.Errorf("%v: cleanout context: %w", err, closeErr)
+			}
+			return nil, err
+		}
+	}
+
+	if !proxy.ctx.IsProxyHandlerRunning() {
+		if err := proxy.ctx.StartProxyHandler(); err != nil {
+			err = fmt.Errorf("ctx.StartProxyHandler: %w", err)
+			if closeErr := proxy.ctx.Close(); closeErr != nil {
+				return nil, fmt.Errorf("%v: cleanout context: %w", err, closeErr)
+			}
+			return nil, err
+		}
+	}
+
 	err := proxy.lintProxyChain()
 	if err != nil {
 		return nil, fmt.Errorf("proxy.lintProxyChain: %w", err)
