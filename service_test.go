@@ -546,6 +546,25 @@ func (test *TestServiceSuite) Test_20_Service_unitsByServiceRule() {
 	test.closeService()
 }
 
+// Test_21_Service_SetProxyChain tests setting the proxy chains
+func (test *TestServiceSuite) Test_21_Service_SetProxyChain() {
+	s := test.Require
+
+	// the SetupTest adds "main" category handler with "hello" command
+	test.newService()
+	rule := serviceConfig.NewServiceDestination(test.service.url)
+	local1 := &serviceConfig.Local{}
+	local2 := &serviceConfig.Local{}
+	proxy1 := &serviceConfig.Proxy{Local: local1, Id: "proxy_1", Category: "proxy_cat_1", Url: "github.com/ahmetson/proxy-1"}
+	proxy2 := &serviceConfig.Proxy{Local: local2, Id: "proxy_2", Category: "proxy_cat_2", Url: "github.com/ahmetson/proxy-2"}
+
+	err := test.service.SetProxyChain([]*serviceConfig.Proxy{proxy1, proxy2}, rule)
+	s().NoError(err)
+
+	// clean out
+	test.closeService()
+}
+
 // In order for 'go test' to run this suite, we need to create
 // a normal test function and pass our suite to suite.Run
 func TestService(t *testing.T) {
