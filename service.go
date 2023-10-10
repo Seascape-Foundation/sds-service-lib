@@ -480,7 +480,7 @@ func (independent *Service) setHandlerClient(c base.Interface) error {
 }
 
 // startHandler sets the log into the handler which is prepared already.
-// then, starts it.
+// Then, starts it.
 func (independent *Service) startHandler(handler base.Interface) error {
 	if err := handler.SetLogger(independent.Logger); err != nil {
 		return fmt.Errorf("handler(id: '%s').SetLogger: %w", handler.Config().Id, err)
@@ -493,12 +493,68 @@ func (independent *Service) startHandler(handler base.Interface) error {
 	return nil
 }
 
+func (independent *Service) startHandlers() error {
+	var err error
+	startedAmount := 0
+
+	for category, raw := range independent.Handlers {
+		handler := raw.(base.Interface)
+		if err = independent.setHandlerClient(handler); err != nil {
+			err = fmt.Errorf("setHandlerClient('%s'): %w", category, err)
+			goto exitStartHandler
+		}
+
+		if err = independent.startHandler(handler); err != nil {
+			err = fmt.Errorf("startHandler: %w", err)
+			goto exitStartHandler
+		}
+		startedAmount++
+	}
+
+exitStartHandler:
+	if err == nil {
+		return nil
+	}
+
+	if startedAmount == 0 {
+		return err
+	}
+	return independent.closeHandlers(startedAmount)
+}
+
+func (independent *Service) closeHandlers(startedAmount int) error {
+	var err error
+
+	if startedAmount == 0 {
+		return err
+	}
+
+	for category, raw := range independent.Handlers {
+		handler := raw.(base.Interface)
+		handlerClient, newErr := manager_client.New(handler.Config())
+
+		if newErr != nil {
+			return fmt.Errorf("%v: manager_client.New('%s'): %w", err, category, newErr)
+		} else {
+			if closeErr := handlerClient.Close(); closeErr != nil {
+				return fmt.Errorf("%v: handlerClient('%s').Close: %w", err, category, closeErr)
+			}
+		}
+
+		startedAmount--
+		if startedAmount == 0 {
+			break
+		}
+	}
+
+	return nil
+}
+
 // Start the service.
 //
 // Requires at least one handler.
 func (independent *Service) Start() (*sync.WaitGroup, error) {
 	var err error
-	var startedHandlers []string
 
 	if len(independent.Handlers) == 0 {
 		err = fmt.Errorf("no Handlers. call service.SetHandler")
@@ -531,19 +587,9 @@ func (independent *Service) Start() (*sync.WaitGroup, error) {
 		goto errOccurred
 	}
 
-	for category, raw := range independent.Handlers {
-		handler := raw.(base.Interface)
-		if err = independent.setHandlerClient(handler); err != nil {
-			err = fmt.Errorf("setHandlerClient('%s'): %w", category, err)
-			goto errOccurred
-		}
-
-		if err = independent.startHandler(handler); err != nil {
-			err = fmt.Errorf("startHandler: %w", err)
-			goto errOccurred
-		}
-
-		startedHandlers = append(startedHandlers, category)
+	err = independent.startHandlers()
+	if err != nil {
+		goto errOccurred
 	}
 
 	// todo prepare the extensions by calling them in the context.
@@ -573,20 +619,8 @@ errOccurred:
 			err = fmt.Errorf("%v: ctx.Close: %w", err, closeErr)
 		}
 
-		for _, category := range startedHandlers {
-			handler := independent.Handlers[category].(base.Interface)
-			handlerClient, newErr := manager_client.New(handler.Config())
-			if newErr != nil {
-				err = fmt.Errorf("%v: manager_client.New('%s'): %w", err, category, newErr)
-			} else {
-				if closeErr = handlerClient.Close(); closeErr != nil {
-					err = fmt.Errorf("%v: handlerClient('%s').Close: %w", err, category, closeErr)
-				}
-			}
-		}
-
 		if independent.manager.Running() {
-			closeErr = independent.manager.Close()
+			closeErr := independent.manager.Close()
 			if closeErr != nil {
 				err = fmt.Errorf("%v: manager.Close: %w", err, closeErr)
 			}
