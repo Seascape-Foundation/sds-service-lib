@@ -39,7 +39,7 @@ func (proxy *Proxy) setProxyUnits() error {
 	proxyClient := proxy.ctx.ProxyClient()
 	proxyChains, err := proxyClient.ProxyChains()
 	if err != nil {
-		return fmt.Errorf("proxyClient.ProxyChainsByRuleUrl: %w", err)
+		return fmt.Errorf("proxyClient.ProxyChains: %w", err)
 	}
 
 	parentClient := proxy.ParentManager
