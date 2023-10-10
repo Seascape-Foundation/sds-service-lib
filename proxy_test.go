@@ -1,7 +1,6 @@
 package service
 
 import (
-	"fmt"
 	clientConfig "github.com/ahmetson/client-lib/config"
 	"github.com/ahmetson/datatype-lib/data_type/key_value"
 	"github.com/ahmetson/datatype-lib/message"
@@ -11,12 +10,10 @@ import (
 	"github.com/ahmetson/handler-lib/sync_replier"
 	"github.com/ahmetson/log-lib"
 	"github.com/ahmetson/os-lib/arg"
-	"github.com/ahmetson/os-lib/path"
 	"github.com/ahmetson/service-lib/flag"
 	"github.com/pebbe/zmq4"
 	"github.com/stretchr/testify/suite"
 	win "os"
-	"path/filepath"
 	"testing"
 )
 
@@ -26,42 +23,32 @@ import (
 type TestProxySuite struct {
 	suite.Suite
 
-	parent     *Service // the manager to test
-	currentDir string   // executable to store the binaries and source codes
-	parentUrl  string   // dependency source code
-	parentId   string   // the parentId of the dependency
-	url        string
-	id         string
-	envPath    string
-	handler    base.Interface
-	logger     *log.Logger
+	parent    *Service // the manager to test
+	parentUrl string   // dependency source code
+	parentId  string   // the parentId of the dependency
+	url       string
+	id        string
+	handler   base.Interface
+	logger    *log.Logger
 
 	defaultHandleFunc route.HandleFunc0
 	cmd1              string
 	handlerCategory   string
 }
 
+// SetupTest prepares the following:
+//
+//   - current exec directory
+//   - parent id, url and proxy id, url
+//   - handler for a parent, along with TestProxySuite.cmd1 route.
 func (test *TestProxySuite) SetupTest() {
 	s := test.Suite.Require
-
-	currentDir, err := path.CurrentDir()
-	s().NoError(err)
-	test.currentDir = currentDir
 
 	// A valid source code that we want to download
 	test.parentUrl = "github.com/ahmetson/parent-lib"
 	test.parentId = "service_1"
 	test.url = "github.com/ahmetson/proxy-lib"
 	test.id = "proxy_1"
-
-	test.envPath = filepath.Join(currentDir, ".test.env")
-
-	file, err := win.Create(test.envPath)
-	s().NoError(err)
-	_, err = file.WriteString(fmt.Sprintf("%s=%s\n%s=%s\n", flag.IdEnv, test.parentId, flag.UrlEnv, test.parentUrl))
-	s().NoError(err, "failed to write the data into: "+test.envPath)
-	err = file.Close()
-	s().NoError(err, "delete the dump file: "+test.envPath)
 
 	// handler
 	syncReplier := sync_replier.New()
@@ -72,25 +59,48 @@ func (test *TestProxySuite) SetupTest() {
 	s().NoError(syncReplier.Route(test.cmd1, test.defaultHandleFunc))
 	test.handler = syncReplier
 
+	var err error
 	test.logger, err = log.New("test", true)
 	s().NoError(err)
 
 	test.handlerCategory = "main"
-	inprocConfig := handlerConfig.NewInternalHandler(handlerConfig.SyncReplierType, test.handlerCategory)
+	inprocConfig, err := handlerConfig.NewHandler(handlerConfig.SyncReplierType, test.handlerCategory)
+	s().NoError(err)
 	test.handler.SetConfig(inprocConfig)
 	s().NoError(test.handler.SetLogger(test.logger))
 }
 
 func (test *TestProxySuite) TearDownTest() {
-	s := test.Suite.Require
-
-	err := win.Remove(test.envPath)
-	s().NoError(err, "delete the dump file: "+test.envPath)
+	//s := test.Suite.Require
 }
 
 // Test_10_NewProxy tests NewProxy
 func (test *TestProxySuite) Test_10_NewProxy() {
 	s := test.Suite.Require
+
+	_, parentStr, err := ParentConfig(test.parentUrl, test.parentId, uint64(6000))
+	s().NoError(err)
+
+	win.Args = append(win.Args,
+		arg.NewFlag(flag.IdFlag, test.id),
+		arg.NewFlag(flag.UrlFlag, test.url),
+		arg.NewFlag(flag.ParentFlag, parentStr),
+	)
+
+	proxy, err := NewProxy()
+	s().NoError(err)
+
+	// Clean out
+	DeleteLastFlags(3)
+	s().NoError(proxy.ctx.Close())
+}
+
+// Test_11_Proxy_SetHandler tests that SetHandler is not invokable in the proxy.
+func (test *TestProxySuite) Test_11_Proxy_SetHandler() {
+	s := test.Suite.Require
+
+	//parentService, err := NewParent(test.parentId, test.parentUrl, test.handlerCategory, test.handler)
+	//s().NoError(err)
 
 	// Creating a proxy with the valid flags must succeed
 	parentClient := clientConfig.New(test.parentUrl, test.parentId, 6000, zmq4.REP)
@@ -106,10 +116,22 @@ func (test *TestProxySuite) Test_10_NewProxy() {
 	proxy, err := NewProxy()
 	s().NoError(err)
 
-	DeleteLastFlags(3)
+	// No handlers were given
+	s().Len(proxy.Handlers, 0)
 
+	// Setting handlers won't take any effect
+	proxy.SetHandler(test.handlerCategory, test.handler)
+	s().Len(proxy.Handlers, 0)
+
+	// Clean out
+	DeleteLastFlags(3)
 	s().NoError(proxy.ctx.Close())
 }
+
+//// Test_12_Proxy_lintProxyChain checks syncing the proxy chain with a parent
+//func (test *TestProxySuite) Test_12_Proxy_lintProxyChain() {
+//	s := test.Require
+//}
 
 //// The started parent will make the handler and managers available
 //func (test *TestProxySuite) Test_17_Start() {

@@ -9,10 +9,23 @@ import (
 	"github.com/ahmetson/os-lib/arg"
 	"github.com/ahmetson/os-lib/path"
 	"github.com/ahmetson/service-lib/flag"
+	"github.com/pebbe/zmq4"
 	"gopkg.in/yaml.v3"
 	win "os"
 	"path/filepath"
 )
+
+// ParentConfig returns parent config as a struct and string
+func ParentConfig(parentId string, parentUrl string, port uint64) (*clientConfig.Client, string, error) {
+	// Creating a proxy with the valid flags must succeed
+	parentClient := clientConfig.New(parentUrl, parentId, port, zmq4.REP)
+	parentKv, err := key_value.NewFromInterface(parentClient)
+	if err != nil {
+		return nil, "", err
+	}
+	parentStr := parentKv.String()
+	return parentClient, parentStr, nil
+}
 
 func DeleteLastFlags(amount int) {
 	win.Args = win.Args[:len(win.Args)-amount]

@@ -36,6 +36,8 @@ func (proxy *Proxy) SetHandler(_ string, _ base.Interface) {}
 // and storing them in this parent.
 //
 // It won't check against nil parameters since it's a private method.
+//
+// Todo: design setting proxy chains for this proxy
 func (proxy *Proxy) setProxyUnits() error {
 	proxyClient := proxy.ctx.ProxyClient()
 	proxyChains, err := proxyClient.ProxyChains()
