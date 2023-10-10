@@ -1,7 +1,6 @@
 package service
 
 import (
-	clientConfig "github.com/ahmetson/client-lib/config"
 	"github.com/ahmetson/datatype-lib/data_type/key_value"
 	"github.com/ahmetson/datatype-lib/message"
 	"github.com/ahmetson/handler-lib/base"
@@ -11,7 +10,6 @@ import (
 	"github.com/ahmetson/log-lib"
 	"github.com/ahmetson/os-lib/arg"
 	"github.com/ahmetson/service-lib/flag"
-	"github.com/pebbe/zmq4"
 	"github.com/stretchr/testify/suite"
 	win "os"
 	"testing"
@@ -99,14 +97,10 @@ func (test *TestProxySuite) Test_10_NewProxy() {
 func (test *TestProxySuite) Test_11_Proxy_SetHandler() {
 	s := test.Suite.Require
 
-	//parentService, err := NewParent(test.parentId, test.parentUrl, test.handlerCategory, test.handler)
-	//s().NoError(err)
-
 	// Creating a proxy with the valid flags must succeed
-	parentClient := clientConfig.New(test.parentUrl, test.parentId, 6000, zmq4.REP)
-	parentKv, err := key_value.NewFromInterface(parentClient)
+	_, parentStr, err := ParentConfig(test.parentUrl, test.parentId, uint64(6000))
 	s().NoError(err)
-	parentStr := parentKv.String()
+
 	win.Args = append(win.Args,
 		arg.NewFlag(flag.IdFlag, test.id),
 		arg.NewFlag(flag.UrlFlag, test.url),
