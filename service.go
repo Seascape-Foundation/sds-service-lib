@@ -156,56 +156,32 @@ func (independent *Service) SetProxyChain(params ...interface{}) error {
 		return fmt.Errorf("context or proxy client are not set")
 	}
 
-	var sources []string
-	if len(params) == 3 {
-		src, ok := params[0].(string)
-		if ok {
-			sources = []string{src}
-		} else {
-			sourceUrls, ok := params[0].([]string)
-			if !ok {
-				return fmt.Errorf("first argument must be string or []string")
-			} else {
-				sources = sourceUrls
-			}
-		}
-	}
+	var proxyChain *serviceConfig.ProxyChain
+	var ok bool
 
-	i := len(params) - 2
-	var proxies []*serviceConfig.Proxy
-	proxy, ok := params[i].(*serviceConfig.Proxy)
-	if ok {
-		proxies = []*serviceConfig.Proxy{proxy}
-	} else {
-		requiredProxies, ok := params[i].([]*serviceConfig.Proxy)
+	if len(params) == 1 {
+		proxyChain, ok = params[0].(*serviceConfig.ProxyChain)
 		if !ok {
-			return fmt.Errorf("the second argument must be service.Proxy or []service.Proxy")
+			return fmt.Errorf("given a one parameter it must be of *parent.ProxyChain type")
 		}
-		if len(requiredProxies) == 0 {
-			return fmt.Errorf("proxy argument []service.Proxy has no element")
+		if len(proxyChain.Destination.Urls) == 0 {
+			proxyChain.Destination.Urls = []string{independent.url}
 		}
-		proxies = requiredProxies
-	}
-
-	i++
-	var rule *serviceConfig.Rule
-	requiredRule, ok := params[i].(*serviceConfig.Rule)
-	if !ok {
-		return fmt.Errorf("the third argument must be service.Rule")
+		if !proxyChain.IsValid() {
+			return fmt.Errorf("given a one parameter, the proxy chain is not valid")
+		}
 	} else {
-		rule = requiredRule
-	}
-	if len(rule.Urls) == 0 {
-		rule.Urls = []string{independent.url}
-	}
-
-	proxyChain := &serviceConfig.ProxyChain{
-		Sources:     sources,
-		Proxies:     proxies,
-		Destination: rule,
-	}
-	if !proxyChain.IsValid() {
-		return fmt.Errorf("proxy chain not valid")
+		var err error
+		proxyChain, err = serviceConfig.NewProxyChain(params)
+		if err != nil {
+			return fmt.Errorf("serviceConfig.NewProxyChain: %w", err)
+		}
+		if len(proxyChain.Destination.Urls) == 0 {
+			proxyChain.Destination.Urls = []string{independent.url}
+		}
+		if !proxyChain.IsValid() {
+			return fmt.Errorf("given proxy chain fields, the proxy chain is not valid")
+		}
 	}
 
 	proxyClient := independent.ctx.ProxyClient()
