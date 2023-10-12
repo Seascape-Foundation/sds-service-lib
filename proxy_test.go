@@ -1,17 +1,25 @@
 package service
 
 import (
+	"fmt"
+	clientConfig "github.com/ahmetson/client-lib/config"
+	"github.com/ahmetson/config-lib/app"
+	"github.com/ahmetson/config-lib/service"
 	"github.com/ahmetson/datatype-lib/data_type/key_value"
 	"github.com/ahmetson/datatype-lib/message"
 	"github.com/ahmetson/handler-lib/base"
 	handlerConfig "github.com/ahmetson/handler-lib/config"
+	"github.com/ahmetson/handler-lib/manager_client"
 	"github.com/ahmetson/handler-lib/route"
 	"github.com/ahmetson/handler-lib/sync_replier"
 	"github.com/ahmetson/log-lib"
 	"github.com/ahmetson/os-lib/arg"
+	"github.com/ahmetson/os-lib/path"
 	"github.com/ahmetson/service-lib/flag"
+	"github.com/ahmetson/service-lib/manager"
 	"github.com/stretchr/testify/suite"
 	win "os"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -22,13 +30,16 @@ import (
 type TestProxySuite struct {
 	suite.Suite
 
-	parent    *Service // the manager to test
-	parentUrl string   // dependency source code
-	parentId  string   // the parentId of the dependency
-	url       string
-	id        string
-	handler   base.Interface
-	logger    *log.Logger
+	parent            *Service // the manager to test
+	parentUrl         string   // dependency source code
+	parentId          string   // the parentId of the dependency
+	parentLocalBin    string
+	parentConfig      *app.App
+	parentProxyChains []*service.ProxyChain
+	url               string
+	id                string
+	handler           base.Interface
+	logger            *log.Logger
 
 	defaultHandleFunc route.HandleFunc0
 	cmd1              string
@@ -44,10 +55,17 @@ func (test *TestProxySuite) SetupTest() {
 	s := test.Suite.Require
 
 	// A valid source code that we want to download
-	test.parentUrl = "github.com/ahmetson/parent-lib"
-	test.parentId = "service_1"
+	test.parentUrl = "github.com/ahmetson/today-do"
+	test.parentId = "todaydo"
+	test.parentLocalBin = path.BinPath(filepath.Join("./_test_services/proxy_parent/backend/bin"), "test")
+	test.parentConfig = app.New()
 	test.url = "github.com/ahmetson/proxy-lib"
 	test.id = "proxy_1"
+
+	// load the parent configuration
+	parentConfigPath := filepath.Join("./_test_services/proxy_parent/backend/bin/app.yml")
+	err := app.Read(parentConfigPath, test.parentConfig)
+	s().NoError(err)
 
 	// handler
 	syncReplier := sync_replier.New()
@@ -58,7 +76,6 @@ func (test *TestProxySuite) SetupTest() {
 	s().NoError(syncReplier.Route(test.cmd1, test.defaultHandleFunc))
 	test.handler = syncReplier
 
-	var err error
 	test.logger, err = log.New("test", true)
 	s().NoError(err)
 
@@ -71,6 +88,60 @@ func (test *TestProxySuite) SetupTest() {
 
 func (test *TestProxySuite) TearDownTest() {
 	//s := test.Suite.Require
+}
+
+func (test *TestProxySuite) mockedProxyChainsByLastProxy(req message.RequestInterface) message.ReplyInterface {
+	fmt.Printf("test.mockedProxyChainsByLastProxy entered\n")
+
+	id, err := req.RouteParameters().StringValue("id")
+	fmt.Printf("test.mockedProxyChainsByLastProxy params, id='%s', err: %v\n", id, err)
+	if err != nil {
+		return req.Fail("id parameter is missing")
+	}
+	proxyChains := make([]key_value.KeyValue, 0, 1)
+
+	if test.id != id || len(test.parentProxyChains) == 0 {
+		return req.Ok(key_value.New().Set("proxy_chains", proxyChains))
+	}
+
+	fmt.Printf("test.mockedProxyChainsByLastProxy convert ProxyChain to KeyValue\n")
+
+	for i := range test.parentProxyChains {
+		kv, err := key_value.NewFromInterface(test.parentProxyChains[i])
+		if err != nil {
+			return req.Fail(fmt.Sprintf("test.parentProxyChains[%d]: %v", i, err))
+		}
+		proxyChains = append(proxyChains, kv)
+	}
+	fmt.Printf("test.mockedProxyChainsByLastProxy proxy chains to return: %v\n", proxyChains)
+
+	return req.Ok(key_value.New().Set("proxy_chains", proxyChains))
+}
+
+func (test *TestProxySuite) newMockedServiceManager(managerConfig *clientConfig.Client) (*sync_replier.SyncReplier, *handlerConfig.Handler, error) {
+	c := &handlerConfig.Handler{
+		Type:           handlerConfig.SyncReplierType,
+		Category:       "manager",
+		InstanceAmount: 1,
+		Id:             managerConfig.Id,
+		Port:           managerConfig.Port,
+	}
+
+	logger, err := log.New("mocked-service-manager", true)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	syncReplier := sync_replier.New()
+	syncReplier.SetConfig(c)
+	syncReplier.SetLogger(logger)
+
+	err = syncReplier.Route(manager.ProxyChainsByLastId, test.mockedProxyChainsByLastProxy)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return syncReplier, c, nil
 }
 
 // Test_10_NewProxy tests NewProxy
@@ -125,10 +196,159 @@ func (test *TestProxySuite) Test_11_Proxy_SetHandler() {
 	time.Sleep(time.Millisecond * 100)
 }
 
-//// Test_12_Proxy_lintProxyChain checks syncing the proxy chain with a parent
-//func (test *TestProxySuite) Test_12_Proxy_lintProxyChain() {
-//	s := test.Require
-//}
+// Test_12_Proxy_lintProxyChain checks syncing the proxy chain with a parent.
+//
+// Todo: test linting a proxy chain from two parents.
+// For now, proxy redirects to the one parent only. But in the future it can redirect.
+func (test *TestProxySuite) Test_12_Proxy_lintProxyChain() {
+	s := test.Require
+
+	parentService := test.parentConfig.Service(test.parentId)
+	s().NotNil(parentService)
+	parentManager := parentService.Manager
+	parentManager.UrlFunc(clientConfig.Url)
+	parentKv, err := key_value.NewFromInterface(parentManager)
+	s().NoError(err)
+
+	mockedManager, mockedConfig, err := test.newMockedServiceManager(parentManager)
+	s().NoError(err)
+
+	// before we start the mocked service, let's add a proxy chain
+
+	localEmpty := &service.Local{}
+	// not exists, but we don't care since its the upper level and parent won't manage it.
+	proxy1 := &service.Proxy{
+		Local:    localEmpty,
+		Id:       "non_existing_1",
+		Url:      "github.com/ahmetson/non-existing",
+		Category: "non_existing",
+	}
+	thisProxy := &service.Proxy{
+		Local:    &service.Local{},
+		Id:       test.id,
+		Url:      test.url,
+		Category: "test-proxy",
+	}
+	serviceRule := service.NewServiceDestination(test.parentUrl)
+	proxyChain, err := service.NewProxyChain([]*service.Proxy{proxy1, thisProxy}, serviceRule)
+	s().NoError(err)
+	s().True(proxyChain.IsValid())
+	test.parentProxyChains = []*service.ProxyChain{proxyChain}
+
+	// start the parent manager that will be connected by the proxy
+	err = mockedManager.Start()
+	s().NoError(err)
+
+	mockedManagerClient, err := manager_client.New(mockedConfig)
+	s().NoError(err)
+
+	win.Args = append(win.Args,
+		arg.NewFlag(flag.IdFlag, test.id),
+		arg.NewFlag(flag.UrlFlag, test.url),
+		arg.NewFlag(flag.ParentFlag, parentKv.String()),
+	)
+
+	// let's create our proxy
+	proxy, err := NewProxy()
+	s().NoError(err)
+	DeleteLastFlags(3)
+
+	parentProxyChains, err := proxy.ParentManager.ProxyChainsByLastProxy(proxy.id)
+	s().NoError(err)
+	s().Len(parentProxyChains, 1)
+
+	// linting a proxy chain requires dep manager and proxy handler in the context
+	proxy.ctx.SetService(test.id, test.url)
+	err = proxy.ctx.StartDepManager()
+	s().NoError(err)
+	err = proxy.ctx.StartProxyHandler()
+	s().NoError(err)
+
+	// before linting with parent
+	// the Proxy must not have any proxies
+	proxyClient := proxy.ctx.ProxyClient()
+	proxyChains, err := proxyClient.ProxyChains()
+	s().NoError(err)
+	s().Len(proxyChains, 0)
+	s().Nil(proxy.rule)
+	dest, err := proxy.destination()
+	s().Nil(dest)
+	s().Error(err)
+
+	// Linting
+	err = proxy.lintProxyChain()
+	s().NoError(err)
+
+	proxyChains, err = proxyClient.ProxyChains()
+	s().NoError(err)
+	s().Len(proxyChains, 1)
+	s().Nil(proxy.rule)
+	dest, err = proxy.destination()
+	s().NotNil(dest)
+	s().NoError(err)
+
+	// Clean-out.
+	// Test as the proxy is the first
+	err = proxy.ctx.Close()
+	s().NoError(err)
+
+	// Wait a bit for close of the threads
+	time.Sleep(time.Millisecond * 100)
+
+	win.Args = append(win.Args,
+		arg.NewFlag(flag.IdFlag, test.id),
+		arg.NewFlag(flag.UrlFlag, test.url),
+		arg.NewFlag(flag.ParentFlag, parentKv.String()),
+	)
+
+	// let's create our proxy
+	proxy, err = NewProxy()
+	s().NoError(err)
+	DeleteLastFlags(3)
+
+	proxy.ctx.SetService(test.id, test.url)
+	err = proxy.ctx.StartDepManager()
+	s().NoError(err)
+	err = proxy.ctx.StartProxyHandler()
+	s().NoError(err)
+
+	// Parent must have a proxy with one data
+	proxyChain, err = service.NewProxyChain([]*service.Proxy{thisProxy}, serviceRule)
+	s().NoError(err)
+	s().True(proxyChain.IsValid())
+	test.parentProxyChains = []*service.ProxyChain{proxyChain}
+
+	// Lint as this proxy is the first
+	proxyClient = proxy.ctx.ProxyClient()
+	proxyChains, err = proxyClient.ProxyChains()
+	s().NoError(err)
+	s().Len(proxyChains, 0)
+	s().Nil(proxy.rule)
+	dest, err = proxy.destination()
+	s().Nil(dest)
+	s().Error(err)
+
+	// Linting
+	err = proxy.lintProxyChain()
+	s().NoError(err)
+
+	proxyChains, err = proxyClient.ProxyChains()
+	s().NoError(err)
+	s().Len(proxyChains, 0)
+	s().NotNil(proxy.rule)
+	dest, err = proxy.destination()
+	s().NotNil(dest)
+	s().NoError(err)
+
+	err = mockedManagerClient.Close()
+	s().NoError(err)
+
+	err = proxy.ctx.Close()
+	s().NoError(err)
+
+	// Wait a bit for close of the threads
+	time.Sleep(time.Millisecond * 100)
+}
 
 //// The started parent will make the handler and managers available
 //func (test *TestProxySuite) Test_17_Start() {
