@@ -89,8 +89,8 @@ func (proxy *Proxy) setProxyUnits() error {
 	return nil
 }
 
-// The lintProxyChain method fetches the proxy parameters from the parent.
-// Then set it in the proxy context.
+// The lintProxyChain method fetches the proxy chain and a rule from the parent.
+// Then set it in this Proxy context.
 // Todo, make sure to listen for the proxy parameters from the parent by a loop.
 func (proxy *Proxy) lintProxyChain() error {
 	// first, get the proxy chain parameter for this proxy chain
@@ -102,9 +102,20 @@ func (proxy *Proxy) lintProxyChain() error {
 		return fmt.Errorf("parentManager.ProxyChainsByLastProxy(id='%s'): empty proxy chains", proxy.id)
 	}
 	proxyChain := proxyChains[0]
+	if proxyChain.Sources == nil {
+		proxyChain.Sources = []string{}
+	}
+
 	if !proxyChain.IsValid() {
 		return fmt.Errorf("parentManager.ProxyChainsByLastProxy(id='%s'): proxy chain is not valid", proxy.id)
 	}
+
+	preLast := len(proxyChain.Proxies) - 1
+	proxies := make([]*service.Proxy, 0, preLast)
+	proxies = append(proxies, proxyChain.Proxies[:preLast]...)
+	proxyChain.Proxies = proxies
+
+	// No proxy chain, it's the first proxy chain
 	if len(proxyChain.Proxies) == 0 {
 		proxy.rule = proxyChain.Destination
 		return nil
@@ -112,11 +123,6 @@ func (proxy *Proxy) lintProxyChain() error {
 
 	// the rule will be stored in the proxy handler manager
 	proxy.rule = nil
-
-	preLast := len(proxyChain.Proxies) - 1
-	proxies := make([]*service.Proxy, 0, preLast)
-	proxies = append(proxies, proxyChain.Proxies[:preLast]...)
-	proxyChain.Proxies = proxies
 
 	// Add to the proxy client queue the proxy chain.
 	// When the proxy will start the base service, the proxy handler will fetch it.
