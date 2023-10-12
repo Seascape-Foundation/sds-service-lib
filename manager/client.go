@@ -67,10 +67,12 @@ func (c *Client) ProxyChainsByLastProxy(proxyId string) ([]*serviceConfig.ProxyC
 
 	proxyChains := make([]*serviceConfig.ProxyChain, len(kvList))
 	for i, kv := range kvList {
-		err = kv.Interface(proxyChains[i])
+		var proxyChain serviceConfig.ProxyChain
+		err = kv.Interface(&proxyChain)
 		if err != nil {
 			return nil, fmt.Errorf("kv.Interface(proxyChains[%d]): %w", i, err)
 		}
+		proxyChains[i] = &proxyChain
 	}
 
 	return proxyChains, nil
