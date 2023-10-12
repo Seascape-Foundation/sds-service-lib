@@ -147,8 +147,8 @@ func (independent *Service) Id() string {
 // This method creates a serviceConfig.ProxyChain.
 // Then send it to the proxy handler.
 func (independent *Service) SetProxyChain(params ...interface{}) error {
-	if len(params) < 2 || len(params) > 3 {
-		return fmt.Errorf("argument amount is invalid, either two or three arguments must be set")
+	if len(params) < 1 || len(params) > 3 {
+		return fmt.Errorf("argument amount is invalid, either one or three arguments must be set")
 	}
 	if independent.ctx == nil || !independent.ctx.IsConfigRunning() {
 		return fmt.Errorf("context or config engine is not running")
