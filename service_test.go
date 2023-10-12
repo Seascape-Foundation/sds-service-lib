@@ -336,6 +336,7 @@ func (test *TestServiceSuite) Test_16_managerRequest() {
 
 	// wait a bit until the handler and manager are initialized
 	time.Sleep(time.Millisecond * 100)
+	s().True(test.service.manager.Running())
 
 	// test sending a command to the manager
 	createdConfig, err := test.service.ctx.Config().Service(test.id)
@@ -357,6 +358,7 @@ func (test *TestServiceSuite) Test_16_managerRequest() {
 
 	// make sure that context is not running
 	s().False(test.service.ctx.IsRunning())
+	s().False(test.service.manager.Running())
 
 	// clean out
 	test.service = nil
@@ -563,6 +565,100 @@ func (test *TestServiceSuite) Test_21_Service_SetProxyChain() {
 
 	// clean out
 	test.closeService()
+}
+
+// Test_22_Start_Close test service start then close in repeat.
+// It's the collection of all previous tested functions together
+// The started service will make the handler and managers available
+func (test *TestServiceSuite) Test_22_Start_Close() {
+	s := test.Require
+
+	test.newService()
+
+	_, err := test.service.Start()
+	s().NoError(err)
+
+	// wait a bit for thread initialization
+	time.Sleep(time.Millisecond * 100)
+
+	// let's test that handler runs
+	mainHandler := test.mainHandler()
+	externalClient := test.externalClient(mainHandler.Config())
+
+	// Make sure that handlers are running
+	req := message.Request{
+		Command:    "hello",
+		Parameters: key_value.New(),
+	}
+	reply, err := externalClient.Request(&req)
+	s().NoError(err)
+	s().True(reply.IsOK())
+
+	// Make sure that manager is running
+	managerClient := test.managerClient()
+	req = message.Request{
+		Command:    "heartbeat",
+		Parameters: key_value.New(),
+	}
+	reply, err = managerClient.Request(&req)
+	s().NoError(err)
+	s().True(reply.IsOK())
+
+	// clean out
+	// we don't close the handler here by calling mainHandler.Close.
+	//
+	// the service manager must close all handlers.
+	s().NoError(test.service.manager.Close())
+	time.Sleep(time.Millisecond * 100)
+
+	// since we closed by manager, the cleaning-out by test suite not necessary.
+	test.service = nil
+	win.Args = win.Args[:len(win.Args)-2]
+
+	//
+	// Repeat starting the service again
+	//
+
+	test.newService()
+	_, err = test.service.Start()
+	s().NoError(err)
+
+	// wait a bit for thread initialization
+	time.Sleep(time.Millisecond * 100)
+
+	// let's test that handler runs
+	mainHandler = test.mainHandler()
+	externalClient = test.externalClient(mainHandler.Config())
+
+	// Make sure that handlers are running
+	req = message.Request{
+		Command:    "hello",
+		Parameters: key_value.New(),
+	}
+	reply, err = externalClient.Request(&req)
+	s().NoError(err)
+	s().True(reply.IsOK())
+
+	// Make sure that manager is running
+	managerClient = test.managerClient()
+	req = message.Request{
+		Command:    "heartbeat",
+		Parameters: key_value.New(),
+	}
+	reply, err = managerClient.Request(&req)
+	s().NoError(err)
+	s().True(reply.IsOK())
+
+	// clean out
+	// we don't close the handler here by calling mainHandler.Close.
+	//
+	// the service manager must close all handlers.
+	s().NoError(test.service.manager.Close())
+
+	// since we closed by manager, the cleaning-out by test suite not necessary.
+	test.service = nil
+	win.Args = win.Args[:len(win.Args)-2]
+	time.Sleep(time.Millisecond * 100)
 }
 
 // In order for 'go test' to run this suite, we need to create

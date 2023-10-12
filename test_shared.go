@@ -47,7 +47,7 @@ func NewParent(id, url, category string,
 	return created, nil
 }
 
-// dir could a currentDir
+// CloseParent dir could be a currentDir
 func CloseParent(parent *Service, dir string) error {
 	if err := parent.ctx.Close(); err != nil {
 		return err
