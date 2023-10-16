@@ -157,6 +157,10 @@ func (proxy *Proxy) destination() (*service.Rule, error) {
 //
 // Todo handlers must route to the proxy.RequestHandler.
 // Todo, make sure to listen for the proxy parameters from the parent by a loop.
+//
+// Proxy supports:
+//   - replier
+//   - sync_replier
 func (proxy *Proxy) lintHandlers() error {
 	destination, err := proxy.destination()
 	if err != nil {
@@ -170,6 +174,9 @@ func (proxy *Proxy) lintHandlers() error {
 	if len(handlerConfigs) == 0 {
 		return fmt.Errorf("proxy.ParentManager.HandlersByRule(rule='%v', parentId='%s'): no handler configs", destination, proxy.id)
 	}
+	slices.CompactFunc(handlerConfigs, func(x, y *handlerConfig.Handler) bool {
+		return x.Id == y.Id
+	})
 
 	for i := range handlerConfigs {
 		var h base.Interface
@@ -182,7 +189,7 @@ func (proxy *Proxy) lintHandlers() error {
 		}
 		// todo use the proxy category when generating a proxy parentId
 		// it needs to over-write the generateConfig method of the parent to set a new parentId.
-		proxy.SetHandler(handlerConfigs[i].Category, h)
+		proxy.Auxiliary.SetHandler(handlerConfigs[i].Category, h)
 	}
 
 	return nil
