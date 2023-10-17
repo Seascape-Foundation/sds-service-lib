@@ -33,23 +33,19 @@ func NewProxy() (*Proxy, error) {
 func (proxy *Proxy) SetHandler(_ string, _ base.Interface) {}
 
 // The setProxyUnits prepares the proxy chains by fetching the proxies from the parent
-// and storing them in this parent.
+// and storing them in this proxy.
 //
 // It won't check against nil parameters since it's a private method.
 //
-// Todo: design setting proxy chains for this proxy
+// Call it after Proxy.lintProxyChains.
 func (proxy *Proxy) setProxyUnits() error {
 	proxyClient := proxy.ctx.ProxyClient()
-	proxyChains, err := proxyClient.ProxyChains()
+	proxyChains, err := proxyClient.ProxyChains() // returns the linted proxies.
 	if err != nil {
 		return fmt.Errorf("proxyClient.ProxyChains: %w", err)
 	}
 
 	parentClient := proxy.ParentManager
-
-	proxy.Logger.Warn("copying proxy chain rule from the parent to the child",
-		"warning 1", "the proxy may be over-writing it by adding another units",
-		"solution 1", "to the Set and SetUnits of proxy client add an merge flag so it will add to already existing data")
 
 	// set the proxy destination units for each rule
 	for _, proxyChain := range proxyChains {
