@@ -789,196 +789,82 @@ func (test *TestProxySuite) Test_14_Proxy_setProxyUnits() {
 	time.Sleep(time.Millisecond * 100)
 }
 
-// Todo test setProxyUnits
-// Todo test start
+// Test_15_Proxy_Start tests Proxy.Start method
+func (test *TestProxySuite) Test_15_Proxy_Start() {
+	s := test.Require
+
+	parentService := test.parentConfig.Service(test.parentId)
+	s().NotNil(parentService)
+	parentManager := parentService.Manager
+	parentManager.UrlFunc(clientConfig.Url)
+	parentKv, err := key_value.NewFromInterface(parentManager)
+	s().NoError(err)
+
+	mockedManager, mockedConfig, err := test.newMockedServiceManager(parentManager)
+	s().NoError(err)
+
+	// before we start the mocked service, let's add a proxy chain
+
+	// not exists, but we don't care since its upper level and parent won't manage it.
+	thisProxy := &service.Proxy{
+		Local:    &service.Local{},
+		Id:       test.id,
+		Url:      test.url,
+		Category: "test-proxy",
+	}
+	serviceRule := service.NewServiceDestination(test.parentUrl)
+	proxyChain, err := service.NewProxyChain([]*service.Proxy{thisProxy}, serviceRule)
+	s().NoError(err)
+	s().True(proxyChain.IsValid())
+	test.parentProxyChains = []*service.ProxyChain{proxyChain}
+
+	err = mockedManager.Route(manager.HandlersByRule, test.mockedHandlersByRule)
+	s().NoError(err)
+	err = mockedManager.Route(manager.Units, test.mockedUnits)
+	s().NoError(err)
+
+	// start the parent manager that will be connected by the proxy
+	err = mockedManager.Start()
+	s().NoError(err)
+
+	mockedManagerClient, err := manager_client.New(mockedConfig)
+	s().NoError(err)
+
+	win.Args = append(win.Args,
+		arg.NewFlag(flag.IdFlag, test.id),
+		arg.NewFlag(flag.UrlFlag, test.url),
+		arg.NewFlag(flag.ParentFlag, parentKv.String()),
+	)
+
+	// let's create our proxy
+	proxy, err := NewProxy()
+	s().NoError(err)
+	DeleteLastFlags(3)
+
+	// Starting must initialize the handlers too
+	s().Zero(len(proxy.Handlers))
+	_, err = proxy.Start()
+	s().NoError(err)
+
+	// Wait a bit for initialization...
+	time.Sleep(time.Millisecond * 100)
+	s().NotZero(len(proxy.Handlers))
+
+	// Clean out
+	err = mockedManagerClient.Close()
+	s().NoError(err)
+
+	err = proxy.manager.Close()
+	s().NoError(err)
+
+	// Wait a bit for close of the threads
+	time.Sleep(time.Millisecond * 100)
+}
+
+// Todo test starting proxy from the parent
 // Todo test lintProxyChains with the multiple proxies.
 // Todo test lintHandlers with multiple proxies.
 // Todo test start with multiple proxies.
-
-//// The started parent will make the handler and managers available
-//func (test *TestProxySuite) Test_17_Start() {
-//	s := test.Require
-//
-//	// first start a parent
-//	// then start an auxiliary
-//	// set to the proxy chain
-//
-//	test.newService()
-//
-//	_, err := test.parent.Start()
-//	s().NoError(err)
-//
-//	// wait a bit for thread initialization
-//	time.Sleep(time.Millisecond * 100)
-//
-//	// let's test that handler runs
-//	mainHandler := test.mainHandler()
-//	externalClient := test.externalClient(mainHandler.Config())
-//
-//	// Make sure that handlers are running
-//	req := message.Request{
-//		Command:    "hello",
-//		Parameters: key_value.New(),
-//	}
-//	reply, err := externalClient.Request(&req)
-//	s().NoError(err)
-//	s().True(reply.IsOK())
-//
-//	// Make sure that manager is running
-//	managerClient := test.managerClient()
-//	req = message.Request{
-//		Command:    "heartbeat",
-//		Parameters: key_value.New(),
-//	}
-//	reply, err = managerClient.Request(&req)
-//	s().NoError(err)
-//	s().True(reply.IsOK())
-//
-//	// clean out
-//	// we don't close the handler here by calling mainHandler.Close.
-//	//
-//	// the parent manager must close all handlers.
-//	s().NoError(test.parent.manager.Close())
-//
-//	// since we closed by manager, the cleaning-out by test suite is not necessary.
-//	test.parent = nil
-//	win.Args = win.Args[:len(win.Args)-2]
-//}
-//
-//// Test_18_Service_unitsByRouteRule tests the counting units by route rule
-//func (test *TestProxySuite) Test_18_Service_unitsByRouteRule() {
-//	s := test.Require
-//
-//	cmd2 := "cmd_2"
-//	category2 := "category_2"
-//
-//	// the SetupTest adds "main" category handler with "hello" command
-//	test.newService()
-//	rule := serviceConfig.NewDestination(test.parent.url, test.handlerCategory, test.cmd1)
-//	units := test.parent.unitsByRouteRule(rule)
-//	s().Len(units, 1)
-//
-//	// if the rule has a command that doesn't exist in the parent, it's skipped
-//	rule.Commands = []string{test.cmd1, cmd2}
-//	units = test.parent.unitsByRouteRule(rule)
-//	s().Len(units, 1)
-//
-//	// suppose the handler has both commands; then units must return both
-//	err := test.handler.Route(cmd2, test.defaultHandleFunc)
-//	s().NoError(err)
-//	test.parent.SetHandler(test.handlerCategory, test.handler)
-//
-//	units = test.parent.unitsByRouteRule(rule)
-//	s().Len(units, 2)
-//
-//	// let's say; we have two handlers, in this case search for commands in all categories
-//	syncReplier := sync_replier.New()
-//	s().NoError(syncReplier.Route(test.cmd1, test.defaultHandleFunc))
-//	inprocConfig := handlerConfig.NewInternalHandler(handlerConfig.SyncReplierType, category2)
-//	syncReplier.SetConfig(inprocConfig)
-//	s().NoError(syncReplier.SetLogger(test.logger))
-//	test.parent.SetHandler(category2, syncReplier)
-//	rule.Categories = []string{test.handlerCategory, category2}
-//
-//	units = test.parent.unitsByRouteRule(rule)
-//	s().Len(units, 3)
-//
-//	// clean out
-//	test.closeService()
-//}
-//
-//// Test_19_Service_unitsByHandlerRule tests the counting units by handler rule
-//func (test *TestProxySuite) Test_19_Service_unitsByHandlerRule() {
-//	s := test.Require
-//
-//	cmd2 := "cmd_2"
-//	category2 := "category_2"
-//
-//	// the SetupTest adds "main" category handler with "hello" command
-//	test.newService()
-//	rule := serviceConfig.NewDestination(test.parent.url, test.handlerCategory, test.cmd1)
-//	units := test.parent.unitsByHandlerRule(rule)
-//	s().Len(units, 1)
-//
-//	// if the rule has a command that doesn't exist in the parent, it's skipped
-//	rule.Commands = []string{test.cmd1, cmd2}
-//	units = test.parent.unitsByHandlerRule(rule)
-//	s().Len(units, 1)
-//
-//	// The above code is identical too Handler Rule.
-//	rule = serviceConfig.NewHandlerDestination(test.parent.url, test.handlerCategory)
-//	units = test.parent.unitsByHandlerRule(rule)
-//	s().Len(units, 1)
-//
-//	// suppose the handler has both commands; then units must return both
-//	err := test.handler.Route(cmd2, test.defaultHandleFunc)
-//	s().NoError(err)
-//	test.parent.SetHandler(test.handlerCategory, test.handler)
-//
-//	units = test.parent.unitsByHandlerRule(rule)
-//	s().Len(units, 2)
-//
-//	// let's say; we have two handlers, in this case search for commands in all categories
-//	syncReplier := sync_replier.New()
-//	s().NoError(syncReplier.Route(test.cmd1, test.defaultHandleFunc))
-//	inprocConfig := handlerConfig.NewInternalHandler(handlerConfig.SyncReplierType, category2)
-//	syncReplier.SetConfig(inprocConfig)
-//	s().NoError(syncReplier.SetLogger(test.logger))
-//	test.parent.SetHandler(category2, syncReplier)
-//
-//	rule = serviceConfig.NewHandlerDestination(test.parent.url, []string{test.handlerCategory, category2})
-//
-//	units = test.parent.unitsByHandlerRule(rule)
-//	s().Len(units, 3)
-//
-//	// Excluding the command must not return them as a unit
-//	rule.ExcludeCommands(test.cmd1)
-//	units = test.parent.unitsByHandlerRule(rule)
-//	s().Len(units, 1) // the test.cmd1 exists in two handlers, cmd2 from first handler must be returned
-//
-//	rule.ExcludeCommands(cmd2)
-//	units = test.parent.unitsByHandlerRule(rule)
-//	s().Len(units, 0) // all commands are excluded.
-//
-//	// clean out
-//	test.closeService()
-//}
-//
-//// Test_20_Service_unitsByServiceRule tests the counting units by parent rule
-//func (test *TestProxySuite) Test_20_Service_unitsByServiceRule() {
-//	s := test.Require
-//
-//	cmd2 := "cmd_2"
-//	category2 := "category_2"
-//
-//	// the SetupTest adds "main" category handler with "hello" command
-//	test.newService()
-//	rule := serviceConfig.NewServiceDestination(test.parent.url)
-//	units := test.parent.unitsByServiceRule(rule)
-//	s().Len(units, 1)
-//
-//	// suppose the handler has both commands; then units must return both
-//	err := test.handler.Route(cmd2, test.defaultHandleFunc)
-//	s().NoError(err)
-//	test.parent.SetHandler(test.handlerCategory, test.handler)
-//
-//	units = test.parent.unitsByServiceRule(rule)
-//	s().Len(units, 2)
-//
-//	// let's say; we have two handlers, in this case search for commands in all categories
-//	syncReplier := sync_replier.New()
-//	s().NoError(syncReplier.Route(test.cmd1, test.defaultHandleFunc))
-//	inprocConfig := handlerConfig.NewInternalHandler(handlerConfig.SyncReplierType, category2)
-//	syncReplier.SetConfig(inprocConfig)
-//	s().NoError(syncReplier.SetLogger(test.logger))
-//	test.parent.SetHandler(category2, syncReplier)
-//
-//	units = test.parent.unitsByServiceRule(rule)
-//	s().Len(units, 3)
-//
-//	// clean out
-//	test.closeService()
-//}
 
 func TestProxy(t *testing.T) {
 	suite.Run(t, new(TestProxySuite))
