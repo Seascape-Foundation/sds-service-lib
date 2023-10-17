@@ -82,8 +82,25 @@ func New(ctx context.Interface, serviceId string, blocker **sync.WaitGroup) (*Ma
 //
 // It closes this manager.
 //
-// Todo It doesn't close the proxies, which it must close.
+// It closes all proxies.
 func (m *Manager) Close() error {
+	serviceConf, err := m.ctx.Config().Service(m.serviceId)
+	if err != nil {
+		return fmt.Errorf("m.ctx.Config().Service(id='%s'): %w", m.serviceId, err)
+	}
+	depManager := m.ctx.DepClient()
+	for ruleIndex := range serviceConf.Sources {
+		for i := range serviceConf.Sources[ruleIndex].Proxies {
+			proxy := serviceConf.Sources[ruleIndex].Proxies[i]
+			proxy.Manager.UrlFunc(clientConfig.Url)
+			err := depManager.CloseDep(proxy.Manager)
+			if err != nil {
+				return fmt.Errorf("depManager.CloseDep(serviceConf.Sources[%d].Proxies[%d] = %v): %w",
+					ruleIndex, i, *proxy, err)
+			}
+		}
+	}
+
 	// closing all handlers
 	for _, h := range m.handlerManagers {
 		err := h.Close()
@@ -93,7 +110,7 @@ func (m *Manager) Close() error {
 	}
 	m.handlerManagers = make([]manager_client.Interface, 0)
 
-	err := m.ctx.Close()
+	err = m.ctx.Close()
 	if err != nil {
 		return fmt.Errorf("ctx.Close: %w", err)
 	}
