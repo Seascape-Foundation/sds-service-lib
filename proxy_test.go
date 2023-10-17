@@ -545,6 +545,8 @@ func (test *TestProxySuite) Test_13_Proxy_lintHandlers() {
 
 	err = mockedManager.Route(manager.HandlersByRule, test.mockedHandlersByRuleEmpty)
 	s().NoError(err)
+	err = mockedManager.Route(manager.ProxyConfigSet, test.mockedEmptyUnits)
+	s().NoError(err)
 
 	err = mockedManager.Start()
 	s().NoError(err)
@@ -590,6 +592,8 @@ func (test *TestProxySuite) Test_13_Proxy_lintHandlers() {
 	s().NoError(err)
 	err = mockedManager.Route(manager.HandlersByRule, test.mockedHandlersByRuleTriggers)
 	s().NoError(err)
+	err = mockedManager.Route(manager.ProxyConfigSet, test.mockedEmptyUnits)
+	s().NoError(err)
 	err = mockedManager.Start()
 	s().NoError(err)
 	err = proxy.ctx.Close()
@@ -631,6 +635,8 @@ func (test *TestProxySuite) Test_13_Proxy_lintHandlers() {
 	mockedManager, mockedConfig, err = test.newMockedServiceManager(parentManager)
 	s().NoError(err)
 	err = mockedManager.Route(manager.HandlersByRule, test.mockedHandlersByRule)
+	s().NoError(err)
+	err = mockedManager.Route(manager.ProxyConfigSet, test.mockedEmptyUnits)
 	s().NoError(err)
 	err = mockedManager.Start()
 	s().NoError(err)
@@ -737,6 +743,8 @@ func (test *TestProxySuite) Test_14_Proxy_setProxyUnits() {
 
 	err = mockedManager.Route(manager.Units, test.mockedUnits)
 	s().NoError(err)
+	err = mockedManager.Route(manager.ProxyConfigSet, test.mockedEmptyUnits)
+	s().NoError(err)
 
 	err = mockedManager.Start()
 	s().NoError(err)
@@ -821,6 +829,8 @@ func (test *TestProxySuite) Test_15_Proxy_Start() {
 	err = mockedManager.Route(manager.HandlersByRule, test.mockedHandlersByRule)
 	s().NoError(err)
 	err = mockedManager.Route(manager.Units, test.mockedUnits)
+	s().NoError(err)
+	err = mockedManager.Route(manager.ProxyConfigSet, test.mockedEmptyUnits)
 	s().NoError(err)
 
 	// start the parent manager that will be connected by the proxy
