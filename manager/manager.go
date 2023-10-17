@@ -12,7 +12,6 @@ import (
 	handlerConfig "github.com/ahmetson/handler-lib/config"
 	"github.com/ahmetson/handler-lib/manager_client"
 	syncReplier "github.com/ahmetson/handler-lib/sync_replier"
-	"slices"
 	"sync"
 )
 
@@ -332,10 +331,6 @@ func (m *Manager) onHandlersByRule(req message.RequestInterface) message.ReplyIn
 	handlerConfigs, err := m.handlers()
 	if err != nil {
 		return req.Fail(fmt.Sprintf("m.handlers: %v", err))
-	}
-
-	if !slices.Contains(rule.Urls, m.serviceUrl) {
-		return req.Fail(fmt.Sprintf("the rule doesn't have %s", m.serviceUrl))
 	}
 
 	if rule.IsService() {
