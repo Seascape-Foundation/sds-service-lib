@@ -213,6 +213,76 @@ func (test *TestProxySuite) mockedHandlersByRule(req message.RequestInterface) m
 	return req.Ok(key_value.New().Set("handler_configs", kvs))
 }
 
+// Test lintUnits when units are empty
+func (test *TestProxySuite) mockedEmptyUnits(req message.RequestInterface) message.ReplyInterface {
+	fmt.Printf("test.mockedHandlersByRuleEmpty entered\n")
+
+	kvs := make([]key_value.KeyValue, 0)
+
+	return req.Ok(key_value.New().Set("mockedEmptyUnits", kvs))
+}
+
+// Has the four rules:
+//
+//	Service Rule for the test.parentUrl
+//	Handler Rule for sync_replier
+//	Handler Rule for replier
+//	Route Rule for the test.parentUrl all routes.
+func (test *TestProxySuite) mockedUnits(req message.RequestInterface) message.ReplyInterface {
+	s := test.Require
+
+	raw, err := req.RouteParameters().NestedValue("rule")
+	if err != nil {
+		return req.Fail(fmt.Sprintf("req.RouteParameters().NestedValue('proxy_chain'): %v", err))
+	}
+
+	var rule service.Rule
+	err = raw.Interface(&rule)
+	if err != nil {
+		return req.Fail(fmt.Sprintf("interface conversion failed for %v", rule))
+	}
+
+	kvs := make([]key_value.KeyValue, 0, 3)
+
+	conf1 := service.Unit{
+		ServiceId: test.parentId,
+		HandlerId: "sync_replier",
+		Command:   "hello",
+	}
+	conf2 := service.Unit{
+		ServiceId: test.parentId,
+		HandlerId: "sync_replier",
+		Command:   "world",
+	}
+	conf3 := service.Unit{
+		ServiceId: test.parentId,
+		HandlerId: "replier",
+		Command:   "hello",
+	}
+
+	kv1, err := key_value.NewFromInterface(conf1)
+	s().NoError(err)
+	kv2, err := key_value.NewFromInterface(conf2)
+	s().NoError(err)
+	kv3, err := key_value.NewFromInterface(conf3)
+	s().NoError(err)
+
+	if rule.IsService() && rule.Urls[0] == test.parentUrl {
+		kvs = append(kvs, kv1, kv2, kv3)
+	} else if rule.IsHandler() {
+		if slices.Contains(rule.Categories, "sync_replier") {
+			kvs = append(kvs, kv1, kv2)
+		}
+		if slices.Contains(rule.Categories, "replier") {
+			kvs = append(kvs, kv3)
+		}
+	} else if rule.IsRoute() {
+		kvs = append(kvs, kv1, kv2, kv3)
+	}
+
+	return req.Ok(key_value.New().Set("units", kvs))
+}
+
 func (test *TestProxySuite) newMockedServiceManager(managerConfig *clientConfig.Client) (*sync_replier.SyncReplier, *handlerConfig.Handler, error) {
 	c := &handlerConfig.Handler{
 		Type:           handlerConfig.SyncReplierType,
@@ -450,7 +520,6 @@ func (test *TestProxySuite) Test_12_Proxy_lintProxyChain() {
 
 // Test_13_Proxy_lintHandlers makes sure that proxy gets the handlers from the parent.
 //
-// Todo: Testing a various types of the handlers by different rules.
 // Todo: Testing the triggers are not supported
 // Todo: change the proxy's rule directly.
 // Todo: design a trigger-able proxy accepting.
@@ -646,6 +715,85 @@ func (test *TestProxySuite) Test_13_Proxy_lintHandlers() {
 	// Wait a bit for close of the threads
 	time.Sleep(time.Millisecond * 100)
 }
+
+// Test_14_Proxy_setProxyUnits test over-writing the proxy units.
+// Tests fetching units from the parent.
+func (test *TestProxySuite) Test_14_Proxy_setProxyUnits() {
+	s := test.Require
+
+	// Deriving the parent's manager configuration
+	// from _test_services/proxy_parent/backend/bin/app.yml
+	parentService := test.parentConfig.Service(test.parentId)
+	s().NotNil(parentService)
+	parentManager := parentService.Manager
+	parentManager.UrlFunc(clientConfig.Url)
+	parentKv, err := key_value.NewFromInterface(parentManager)
+	s().NoError(err)
+
+	mockedManager, mockedConfig, err := test.newMockedServiceManager(parentManager)
+	s().NoError(err)
+
+	// Let's over-write the routing for the handlers.
+
+	err = mockedManager.Route(manager.Units, test.mockedUnits)
+	s().NoError(err)
+
+	err = mockedManager.Start()
+	s().NoError(err)
+
+	// wait a bit for initialization
+	time.Sleep(time.Millisecond * 100)
+
+	win.Args = append(win.Args,
+		arg.NewFlag(flag.IdFlag, test.id),
+		arg.NewFlag(flag.UrlFlag, test.url),
+		arg.NewFlag(flag.ParentFlag, parentKv.String()),
+	)
+
+	// let's create our proxy
+	proxy, err := NewProxy()
+	s().NoError(err)
+	DeleteLastFlags(3)
+
+	//// init the config
+	proxy.ctx.SetService(test.id, test.url)
+	err = proxy.ctx.StartDepManager()
+	s().NoError(err)
+	err = proxy.ctx.StartProxyHandler()
+	s().NoError(err)
+
+	// wait a bit for initialization
+	time.Sleep(time.Millisecond * 100)
+
+	// No handlers
+	s().Len(proxy.Handlers, 0)
+
+	rule := service.NewServiceDestination(parentService.Url)
+	proxy.rule = rule // available in the proxy as proxy.destination()
+
+	// 1. fail, handlers are not set in the parent.
+	err = proxy.setProxyUnits()
+	s().NoError(err)
+
+	// Clean out
+	mockedManagerClient, err := manager_client.New(mockedConfig)
+	s().NoError(err)
+
+	err = mockedManagerClient.Close()
+	s().NoError(err)
+
+	err = proxy.ctx.Close()
+	s().NoError(err)
+
+	// Wait a bit for closing the threads
+	time.Sleep(time.Millisecond * 100)
+}
+
+// Todo test setProxyUnits
+// Todo test start
+// Todo test lintProxyChains with the multiple proxies.
+// Todo test lintHandlers with multiple proxies.
+// Todo test start with multiple proxies.
 
 //// The started parent will make the handler and managers available
 //func (test *TestProxySuite) Test_17_Start() {
