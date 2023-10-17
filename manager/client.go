@@ -47,6 +47,20 @@ func (c *Client) Heartbeat() error {
 	return nil
 }
 
+func (c *Client) Close() error {
+	req := &message.Request{
+		Command:    Close,
+		Parameters: key_value.New(),
+	}
+
+	err := c.Submit(req)
+	if err != nil {
+		return fmt.Errorf("c.Request(%s): %w", Heartbeat, err)
+	}
+
+	return nil
+}
+
 func (c *Client) ProxyChainsByLastProxy(proxyId string) ([]*serviceConfig.ProxyChain, error) {
 	req := &message.Request{
 		Command:    ProxyChainsByLastId,
