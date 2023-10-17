@@ -35,7 +35,8 @@ type TestParentChildSuite struct {
 	service    *Service // the manager to test
 	currentDir string   // executable to store the binaries and source codes
 	url        string   // dependency source code
-	id         string   // the id of the dependency
+	id         string   // the id of the parent
+	idChain    string   // the id of the service
 	envPath    string
 	handler    base.Interface
 	logger     *log.Logger
@@ -88,6 +89,7 @@ func (test *TestParentChildSuite) SetupTest() {
 	// A valid source code that we want to download
 	test.url = "github.com/ahmetson/service-lib"
 	test.id = "service_1"
+	test.idChain = "service_chained"
 
 	test.envPath = filepath.Join(currentDir, ".test.env")
 
@@ -168,10 +170,10 @@ func (test *TestParentChildSuite) externalClient(hConfig *handlerConfig.Handler)
 	return externalClient
 }
 
-func (test *TestParentChildSuite) managerClient() *manager.Client {
+func (test *TestParentChildSuite) managerClient(id string) *manager.Client {
 	s := test.Suite.Require
 
-	createdConfig, err := test.service.ctx.Config().Service(test.id)
+	createdConfig, err := test.service.ctx.Config().Service(id)
 	s().NoError(err)
 	managerConfig := createdConfig.Manager
 	managerConfig.UrlFunc(clientConfig.Url)
@@ -179,6 +181,24 @@ func (test *TestParentChildSuite) managerClient() *manager.Client {
 	s().NoError(err)
 
 	return managerClient
+}
+
+// If given port is taken by a process, then kill the process to free the port
+func resetProcess(port int) error {
+	if !net.IsPortUsed("localhost", port) {
+		return nil
+	}
+	pid, err := process.PortToPid(port)
+	if err != nil {
+		return err
+	}
+	proc, err := win.FindProcess(int(pid))
+	if err != nil {
+		return err
+	}
+
+	err = proc.Kill()
+	return err
 }
 
 // Test_10_Start test service start.
@@ -251,13 +271,96 @@ func (test *TestParentChildSuite) Test_10_Start() {
 	s().NotEmpty(serviceConf.Sources)
 
 	// Make sure that manager is running
-	managerClient := test.managerClient()
+	managerClient := test.managerClient(test.id)
 	err = managerClient.Close()
 	s().NoError(err)
 
 	// Wait a bit for closing
 	time.Sleep(time.Second * 5)
 	used = net.IsPortUsed("localhost", proxyPort)
+	s().False(used)
+}
+
+// Test_11_StartChain test starting multiple proxies as a chain
+func (test *TestParentChildSuite) Test_11_StartChain() {
+	s := test.Require
+
+	proxyUrl := "github.com/ahmetson/service-lib/_test_services/proxy_1"
+	proxyUrl2 := "github.com/ahmetson/service-lib/_test_services/proxy_2"
+	proxyId := "proxy_1"
+	proxyId2 := "proxy_2"
+	proxyBinPath := path.BinPath(filepath.Join(".", "_test_services/proxy_1/bin"), "test6")
+	proxyPort := 57397 // taken from ./_test_services/proxy_1/bin/app.yml
+	proxyPort2 := 57398
+
+	err := resetProcess(proxyPort)
+	s().NoError(err)
+	err = resetProcess(proxyPort2)
+	s().NoError(err)
+
+	win.Args = append(win.Args, arg.NewFlag(flag.IdFlag, test.idChain), arg.NewFlag(flag.UrlFlag, test.url))
+
+	created, err := New()
+	s().NoError(err)
+	DeleteLastFlags(2)
+
+	test.service = created
+	test.service.SetHandler(test.handlerCategory, test.handler)
+
+	test.service.ctx.SetService(test.service.id, test.service.url)
+	err = test.service.ctx.StartDepManager()
+	s().NoError(err)
+
+	proxyConf := &serviceConfig.Proxy{
+		Local: &serviceConfig.Local{
+			LocalBin: proxyBinPath,
+		},
+		Id:       proxyId,
+		Url:      proxyUrl,
+		Category: "layer_1",
+	}
+	proxyConf2 := &serviceConfig.Proxy{
+		Local: &serviceConfig.Local{
+			LocalBin: proxyBinPath,
+		},
+		Id:       proxyId2,
+		Url:      proxyUrl2,
+		Category: "layer_2",
+	}
+	rule := serviceConfig.NewServiceDestination()
+	err = test.service.SetProxyChain([]*serviceConfig.Proxy{proxyConf2, proxyConf}, rule)
+	s().NoError(err)
+
+	// No sources
+	serviceConf, err := test.service.ctx.Config().Service(test.idChain)
+	s().Error(err) // no service yet
+
+	_, err = test.service.Start()
+	s().NoError(err)
+
+	// wait a bit for thread initialization
+	time.Sleep(time.Second * 2)
+
+	used := net.IsPortUsed("localhost", proxyPort)
+	s().True(used)
+	used = net.IsPortUsed("localhost", proxyPort2)
+	s().True(used)
+
+	// Test that sources exist
+	serviceConf, err = test.service.ctx.Config().Service(test.idChain)
+	s().NoError(err)
+	s().NotEmpty(serviceConf.Sources)
+
+	// Make sure that manager is running
+	managerClient := test.managerClient(test.idChain)
+	err = managerClient.Close()
+	s().NoError(err)
+
+	// Wait a bit for closing
+	time.Sleep(time.Second * 5)
+	used = net.IsPortUsed("localhost", proxyPort)
+	s().False(used)
+	used = net.IsPortUsed("localhost", proxyPort2)
 	s().False(used)
 }
 
