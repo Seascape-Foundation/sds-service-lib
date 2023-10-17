@@ -185,7 +185,7 @@ func (c *Client) HandlersByRule(rule *serviceConfig.Rule) ([]*handlerConfig.Hand
 func (c *Client) ProxyConfigSet(rule *serviceConfig.Rule, serviceSource *serviceConfig.SourceService) error {
 	req := &message.Request{
 		Command:    ProxyConfigSet,
-		Parameters: key_value.New().Set("rule", rule).Set("service_source", serviceSource),
+		Parameters: key_value.New().Set("rule", rule).Set("source_service", serviceSource),
 	}
 	reply, err := c.Request(req)
 	if err != nil {
