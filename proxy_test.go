@@ -861,9 +861,6 @@ func (test *TestProxySuite) Test_15_Proxy_Start() {
 	time.Sleep(time.Millisecond * 100)
 }
 
-// Todo test starting proxy from the parent
-// Todo test lintProxyChains with the multiple proxies.
-// Todo test lintHandlers with multiple proxies.
 // Todo test start with multiple proxies.
 
 func TestProxy(t *testing.T) {

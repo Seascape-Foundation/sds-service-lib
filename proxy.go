@@ -232,7 +232,6 @@ func (proxy *Proxy) Start() (*sync.WaitGroup, error) {
 		return nil, fmt.Errorf("proxy.lintHandlers: %w", err)
 	}
 
-
 	// todo call the setConfig first then invoke the ParentManager.SetProxyChain
 	// then start the auxiliary.
 	// Because auxiliary will start the proxies as well.
@@ -241,7 +240,6 @@ func (proxy *Proxy) Start() (*sync.WaitGroup, error) {
 	if err != nil {
 		return nil, fmt.Errorf("proxy.Auxiliary.Start: %w", err)
 	}
-
 
 	// send to the parent info that it was set.
 	rule, _ := proxy.destination()
