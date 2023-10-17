@@ -2,6 +2,7 @@ package service
 
 import (
 	"fmt"
+	clientConfig "github.com/ahmetson/client-lib/config"
 	"github.com/ahmetson/config-lib/service"
 	"github.com/ahmetson/handler-lib/base"
 	handlerConfig "github.com/ahmetson/handler-lib/config"
@@ -14,7 +15,8 @@ import (
 // Proxy defines the parameters of the proxy parent
 type Proxy struct {
 	*Auxiliary
-	rule *service.Rule // set it if this proxy is first in the chain
+	rule      *service.Rule // set it if this proxy is first in the chain
+	proxyConf *service.Proxy
 }
 
 // NewProxy proxy parent returned
@@ -26,7 +28,7 @@ func NewProxy() (*Proxy, error) {
 
 	auxiliary.Type = service.ProxyType
 
-	return &Proxy{auxiliary, nil}, nil
+	return &Proxy{auxiliary, nil, nil}, nil
 }
 
 // SetHandler is disabled as the proxy returns them from the parent
@@ -107,6 +109,7 @@ func (proxy *Proxy) lintProxyChain() error {
 	}
 
 	preLast := len(proxyChain.Proxies) - 1
+	proxy.proxyConf = proxyChain.Proxies[preLast]
 	proxies := make([]*service.Proxy, 0, preLast)
 	proxies = append(proxies, proxyChain.Proxies[:preLast]...)
 	proxyChain.Proxies = proxies
@@ -229,9 +232,42 @@ func (proxy *Proxy) Start() (*sync.WaitGroup, error) {
 		return nil, fmt.Errorf("proxy.lintHandlers: %w", err)
 	}
 
+
+	// todo call the setConfig first then invoke the ParentManager.SetProxyChain
+	// then start the auxiliary.
+	// Because auxiliary will start the proxies as well.
+	// We don't want to block until the proxies are set to indicate the parent.
 	wg, err := proxy.Auxiliary.Start()
 	if err != nil {
 		return nil, fmt.Errorf("proxy.Auxiliary.Start: %w", err)
+	}
+
+
+	// send to the parent info that it was set.
+	rule, _ := proxy.destination()
+	if rule != nil {
+		serviceConf, err := proxy.ctx.Config().Service(proxy.id)
+		if err != nil {
+			return wg, fmt.Errorf("proxy.ctx.Config().Service(id='%s'): %w", proxy.id, err)
+		}
+
+		source := &service.SourceService{
+			Proxy:   proxy.proxyConf,
+			Manager: serviceConf.Manager,
+			Clients: make([]*clientConfig.Client, len(serviceConf.Handlers)),
+		}
+		for i := range serviceConf.Handlers {
+			handlerConf := serviceConf.Handlers[i]
+			handlerZmqType := handlerConfig.SocketType(handlerConf.Type)
+			clientConf := clientConfig.New(proxy.url, handlerConf.Id, handlerConf.Port, handlerZmqType)
+
+			source.Clients[i] = clientConf
+		}
+		err = proxy.ParentManager.ProxyConfigSet(rule, source)
+		if err != nil {
+			return wg, fmt.Errorf("proxy.ParentManager.ProxyConfigSet(rule='%v', source='%v'): %w",
+				*rule, *source, err)
+		}
 	}
 
 	return wg, nil
