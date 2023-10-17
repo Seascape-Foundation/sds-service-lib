@@ -154,15 +154,18 @@ func (independent *Service) SetProxyChain(params ...interface{}) error {
 		return fmt.Errorf("context or config engine is not running")
 	}
 
-	if !independent.ctx.IsProxyHandlerRunning() {
-		independent.ctx.SetService(independent.id, independent.url)
+	independent.ctx.SetService(independent.id, independent.url)
 
+	if !independent.ctx.IsDepManagerRunning() {
 		err := independent.ctx.StartDepManager()
 		if err != nil {
 			return fmt.Errorf("ctx.StartDepManager: %w", err)
 		}
 
-		err = independent.ctx.StartProxyHandler()
+	}
+
+	if !independent.ctx.IsProxyHandlerRunning() {
+		err := independent.ctx.StartProxyHandler()
 		if err != nil {
 			return fmt.Errorf("ctx.StartProxyHandler: %w", err)
 		}
