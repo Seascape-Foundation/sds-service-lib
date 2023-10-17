@@ -219,7 +219,7 @@ func (test *TestProxySuite) mockedEmptyUnits(req message.RequestInterface) messa
 
 	kvs := make([]key_value.KeyValue, 0)
 
-	return req.Ok(key_value.New().Set("mockedEmptyUnits", kvs))
+	return req.Ok(key_value.New().Set("units", kvs))
 }
 
 // Has the four rules:
