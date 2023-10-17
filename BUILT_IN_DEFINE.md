@@ -1,7 +1,7 @@
 # Built in definition
 
 This page explains how to define the proxies within the code.
-The compiled binary will include the proxies, therefore a proxy chain will be built in.
+The compiled binary will include the id and urls of the proxies, therefore a proxy chain will be built in.
 
 The built-in proxies are declared at the independent service.
 Because of the self-orchestration, the destination service will act as a parent.
@@ -171,3 +171,13 @@ Then only the services of the url could access to the proxy.
 8. From the returned proxy chain, it will start the next proxy.
 9. If it's the last proxy, then proxy will inform the parent as it's ready.
 
+---
+
+## Proxy's own proxy chain
+It's not yet supported as I didn't find any use case.
+Perhaps, it would be changed, after adding on-the-fly.
+
+> **Todo**
+> 
+> Maybe remove the built-in definition with the meta comments?
+> So we won't hard-code the proxies as they could be changed anyway.

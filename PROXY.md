@@ -1,96 +1,6 @@
-# Service
-*This is one of the core modules.*
-
-The *service* library allows creating of independent micro**services**.
-
-> We omit the **micro** prefix from now on.
-
-**The independent services are minimal stand-alone applications.**
-A developer defines the list of API routes and a function that's executed.
-
-The API routes are grouped into the [handlers](https://github.com/ahmetson/handler-lib).
-*The handler defines how the API is served to the external users.*
-
-The independent services are isolated from each other.
-They don't share a configuration nor the data that they are working on.
-
-## Application architecture
-
-The application consists of multiple services.
-
-The independent service is the core of the application.
-As it will keep the business logic.
-
-There are auxiliary services.
-
-The proxies that operate on a request before it's passed to a service.
-And extensions extending service possibility or do some side works.
-
-**One of the aims of SDS framework is to write self-orchestrating applications.**
-
-In the SDS framework, the services are organized in a parent-child relationship.
-The independent service acts as a root node. 
-The auxiliary services counted as the child nodes.
-
-That means the root node is responsible for spawning the children.
-
-It's done in the background by the framework, so developers don't have to worry about it.
-
-## Coarsely grained API
-
-When you define an API routes, you set them at the minimal level.
-But if the service is stored on another machine, then requesting data by minimal API will cause a delay.
-
-In the microservice architecture, the remote APIs must be coarsely grained to reduce the network hops.
-
-The extensions with *merge* flag can group the routes of the parent.
-
-# LifeCycle
-When a service runs, it prepares itself.
-The preparation is composed of two steps.
-First, it creates a configuration based on the required parameters.
-Then, it fills them. 
-If a user passed a pre-defined configuration,
-then the process will validate and apply them.
-If there is no configuration, then it will create a random configuration.
-That random configuration is written to the path.
-
-When the service is prepared, it runs the manager. 
-The manager is set in the *"PREPARED"* state. 
-If the service has a parent service, then it will send the message to the parent.
-
-After running the manager, the service runs the dependency manager.
-The dependency manager running means three things.
-If the service is running, it will ask to acknowledge the parent.
-Acknowledging the means to ask permission to connect from the parent.
-If the service is not acknowledged, it will mark that service as failed.
-If the service is not running, it will check the binary.
-If the binary exists, the service will run that binary.
-If the binary does not exist, the dependency manager will install it.
-Then run it.
-The dependency manager is working with the nearby proxies and extensions.
-
-> As a parent, it passes an id, configuration and its own id as a parent.
-
-When the dependencies are all set, it updates the state to *"READY"*.
-When some dependencies are not set, it will mark itself as *"PARTIALLY_READY"*.
-
-When it's (partially) ready, the dependency manager creates a heartbeat tracker.
-This tracker is given to the manager.
-Then, the manager creates its own heartbeat, and sends the messages to the parent.
-If no parent is given, it won't set it.
-
-# Usage
-
-```go
-id := "application name"
-s := service.New(id)
-s.Prepare() // runs the manager
-s.RunDepManager()
-s.Run() // sets up
-```
-
-# Service Lib
+# Proxy
+The proxies are auxiliary services.
+They do some operation on the request before independent services.
 
 The proxies could be used for validation, authentication, authorization, load-balancing.
 
@@ -104,6 +14,8 @@ Therefore, proxies must have the destination to forward the message.
 Even though the proxies are spawned by the parent proxies.
 There is possible to create a proxy that will manage the parent too.
 For example, the proxies of the *rely* category could manage the independent services.
+
+But what is the proxy category?
 
 ## Category
 When there is a proxy chain, there must be some order of the proxies.
@@ -160,7 +72,7 @@ The multiple destinations are of the same level.
 
 ### Definition
 The declaration of the proxy parameters is defined in the `config-lib/service` package.
-Because, the proxies are stored in the configuration as a yaml file. 
+Because, the proxies are stored in the configuration as a yaml file.
 They maybe used later.
 
 The ``
@@ -171,9 +83,9 @@ The proxy structure is:
 
 ```go
 type Proxy struct{
-	Url string
-	Id string
-	Category string `json:"_,omitempty"`
+Url string
+Id string
+Category string `json:"_,omitempty"`
 }
 ```
 
@@ -197,9 +109,9 @@ The proxy chains are defined as `service.ProxyChain` in the `config-lib` module.
 
 ```go
 type ProxyChain struct {
-	Sources []string
-	Proxies []*Proxy
-	Destinations *Rule
+Sources []string
+Proxies []*Proxy
+Destinations *Rule
 }
 ```
 
@@ -207,14 +119,14 @@ When a proxy is set to the service, the service will have store them as
 
 ```go
 type Service struct{
-	ProxyChains []*ProxyChain
+ProxyChains []*ProxyChain
 }
 ```
 
 > The category is not implemented yet.
 
 > **todo**
-> 
+>
 > Generate the id from proxy-chain, destination.
 
 ---
@@ -249,7 +161,7 @@ The first part is the handler's frontend.
 This allows supporting any kind of protocol; that's different from zeromq.
 
 > SDS uses zeromq for internal communication.
-> 
+>
 > But the application may want to enable the HTTP, WebSocket or other kinds of protocols for the users.
 
 The over-writing the frontend is done via `proxy.PairExternal(pair.Interface)`
@@ -272,12 +184,12 @@ If the destination handler must reply a message, then proxy must reply as well.
 In this scenario,
 the message that comes from the destination is converted into the custom type using `messageOp.NewReply`
 
-Some proxies maybe working with the metadata. 
+Some proxies maybe working with the metadata.
 As such, they won't need to process the messages.
 For this kind of proxies, set the message type as `message.RawMessage()`.
 
 > **Todo**
-> 
+>
 > Maybe add another message operation to convert the message to destination's format?
 
 ## Handle Function
@@ -309,10 +221,10 @@ Over-writing the senders could be used, for example, to announce all users.
 Or for load-balancing.
 
 > **todo**
-> 
+>
 > Over-write the senders to include the service availability information.
 > Or maybe design it to work with the extension that has the metadata of the services.
-> 
+>
 > It will be designed by implementing backup-proxy, load-balancer-proxy.
 
 ## Recap
@@ -326,19 +238,19 @@ func main() {
 	proxy.PairExternal() // optional
 	proxy.SetMessageOperations() // optional
 	proxy.SetHandleFunc()
-	
+
 	// runChan blocks the service until proxy won't stop.
 	// In case if the proxy stopped with an error, the channel shall contain it.
 	// In case if the proxy closed by the destination, then it will return nil.
 	runChan, startErr := proxy.Start()
 	if startErr != nil {
 		panic(startErr)
-    }
-	
+	}
+
 	err := <- runChan
 	if err != nil {
 		panic(err)
-    }
+	}
 }
 ```
 
@@ -352,33 +264,33 @@ Let's create `main.go` with the minimal *proxy*:
 package main
 
 import (
-"github.com/ahmetson/service-lib"
-log "github.com/ahmetson/log-lib"
-"github.com/ahmetson/service-lib/configuration"
-"github.com/ahmetson/service-lib/proxy"
+	"github.com/ahmetson/service-lib"
+	log "github.com/ahmetson/log-lib"
+	"github.com/ahmetson/service-lib/configuration"
+	"github.com/ahmetson/service-lib/proxy"
 )
 
 func main() {
-logger, _ := log.New("my-proxy", false)
-appConfig, _ := configuration.New(logger)
+	logger, _ := log.New("my-proxy", false)
+	appConfig, _ := configuration.New(logger)
 
-// setup service
-service := proxy.New(appConfig, logger.Child("proxy"))
+	// setup service
+	service := proxy.New(appConfig, logger.Child("proxy"))
 
-// setup a default source
-service.SetDefaultSource(configuration.ReplierType)
-// or
-// service.SetCustomSource(customController)
+	// setup a default source
+	service.SetDefaultSource(configuration.ReplierType)
+	// or
+	// service.SetCustomSource(customController)
 
-// destinations, handlers are part of the handler
-service.Controller.RequireDestination(configuration.ReplierType)
-service.Controller.SetRequestHandler()
-service.Controller.SetReplyHandler()
+	// destinations, handlers are part of the handler
+	service.Controller.RequireDestination(configuration.ReplierType)
+	service.Controller.SetRequestHandler()
+	service.Controller.SetReplyHandler()
 
-// validate before running it
-service.Prepare()
+	// validate before running it
+	service.Prepare()
 
-service.Run()
+	service.Run()
 }
 ```
 
