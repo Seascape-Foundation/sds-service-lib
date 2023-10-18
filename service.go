@@ -612,6 +612,7 @@ func (independent *Service) Start() (*sync.WaitGroup, error) {
 	}
 
 	// get the proxies from the proxy chain for this service.
+	// must be called before starting handlers, as routing of the handlers maybe set by proxy units.
 	if err = independent.setProxyUnits(); err != nil {
 		err = fmt.Errorf("independent.setProxyUnits: %w", err)
 		goto errOccurred
