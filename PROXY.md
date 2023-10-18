@@ -1,27 +1,39 @@
 # Proxy
-The proxies are auxiliary services.
-They do some operation on the request before independent services.
+The proxies are special services that operate before independent services.
+If the user request passes the proxy handling, then it's forwarded.
 
-The proxies could be used for validation, authentication, authorization, load-balancing.
+Proxies are organized as a chain.
+A user request comes to proxy A. 
+If it passes the condition, then proxy A forwards to proxy B.
+If the request passes the condition, then it's forwarded to the independent service.
 
-Proxies can be organized as a chain of proxies.
-The proxy B receives a message only if proxy A succeeded.
+**Proxies either reject or forward the messages.
+So, don't set the business logic in the proxies**.
 
-As auxiliary service, proxies must always forward the messages.
-Therefore, proxies must have the destination to forward the message.
+Examples of the proxies are 
+* validation, 
+* authentication, 
+* authorization, 
+* load-balancing,
+* and many more...
 
-## Parent-child relationship
-Even though the proxies are spawned by the parent proxies.
-There is possible to create a proxy that will manage the parent too.
-For example, the proxies of the *rely* category could manage the independent services.
+The proxies are started by the independent service.
+But it's possible to manage the parent from the proxy itself.
+
+Think, independent service as the parent and proxy as a child.
+When a parent gets old, a child has to look after it.
+
+Such proxies are classified in the *reliability* category.
 
 But what is the proxy category?
 
 ## Category
+As said earlier, proxies can be set as a chain.
 When there is a proxy chain, there must be some order of the proxies.
+To easily set the valid order, we categorize the proxies by their purpose.
 
-By behavior, the proxies are classified into categories.
-And the proxies are ordered by default on its category.
+This order helps us to invalid requests as soon as possible without
+over laying computer.
 
 The categories are:
 * *entry* &ndash; proxies set a different protocol for receiving data. Use `PairExternal` method.
@@ -53,7 +65,6 @@ If the destination service has the proxies, then proxies are added in order by [
 
 Refer to [build in definition](BUILT_IN_DEFINE.md) for description on how to add proxies.
 
-
 ## Multi source
 If the service has a multiple allowed service, then they are assisted.
 
@@ -72,54 +83,39 @@ The multiple destinations are of the same level.
 
 ### Definition
 The declaration of the proxy parameters is defined in the `config-lib/service` package.
-Because, the proxies are stored in the configuration as a yaml file.
-They maybe used later.
 
-The ``
-
-The `service.NewProxy(url string)` returns the pointer to `service.Proxy`.
+The `service.NewProxy(id: string, url: string)` returns the pointer to `service.Proxy`.
 
 The proxy structure is:
 
-```go
-type Proxy struct{
-Url string
-Id string
-Category string `json:"_,omitempty"`
+```typescript
+type Proxy = {
+    Url: string;
+    Id: string;
+    Category?: string; 
 }
 ```
-
-Since the proxy sets the Url, the id is generated from the url itself.
 
 The destination structure defined as `service.Rule` in the `config-lib` module:
 
-```go
-package readme
-type Rule struct{
-	Urls                []string // the service url 
-	Categories          []string // handler category 
-	Commands            []string    // route name 
-	ExcludedCommands    []string
+```typescript
+type Rule ={
+	Urls:                string[] // the service url 
+	Categories:          string[] // handler category 
+	Commands:            string[] // route name 
+	ExcludedCommands:    string[]
 }
 ```
 
-The sources are defined as a list of strings.
+The sources are defined as a list of strings: `string[]`.
 
 The proxy chains are defined as `service.ProxyChain` in the `config-lib` module.
 
-```go
-type ProxyChain struct {
-Sources []string
-Proxies []*Proxy
-Destinations *Rule
-}
-```
-
-When a proxy is set to the service, the service will have store them as
-
-```go
-type Service struct{
-ProxyChains []*ProxyChain
+```typescript
+type ProxyChain = {
+    Sources?: string[]
+    Proxies: Proxy[] // pointer
+    Destination: Rule // pointer
 }
 ```
 
@@ -132,27 +128,22 @@ ProxyChains []*ProxyChain
 ---
 
 ## Execution
-The independent service manager has the following routes:
-* `handlers` returns the list of the handler configuration.
-* `routes` returns the list of the routes in the configuration.
-* `proxy-chain` returns the proxy chain
-
-
----
-The above code described the proxy definition in the `config-lib` and `service-lib`.
+The above code described the proxy definition in the `config-lib`.
 Now, it's the time to define the proxy within the `proxy-lib` itself.
 
-# Proxy
+# Handlers
 
-Because, proxies are the pre-layer of the independent services.
-For the end users, the proxies must be invisible.
-Therefore, the proxies will define the handlers based on the destinations.
-As a developer, you can not set them.
+By design, the proxies are intended to be invisible for the requester.
+If a user connects to the independent service through the proxy,
+then proxy is considered as the independent service itself.
 
-*For example, if the destination handler is trigger-able, then the proxy will be trigger-able as well.*
-*Or, if the destination handler does not reply back, then proxy won't reply back as well.*
+Remember that in independent services we define the routes
+and group them by the handlers.
+In the proxies, we define pass function only.
+The routes and handlers are fetched from the destination.
+And the `Rule` parameter filters them.
 
-The proxy purposes are to extend the services, therefore, some parts of the handlers are over-writable.
+**As a developer, you can not set a route or a handler.**
 
 ## Over-writable
 
@@ -227,111 +218,14 @@ Or for load-balancing.
 >
 > It will be designed by implementing backup-proxy, load-balancer-proxy.
 
-## Recap
-
-```go
-package readme
-
-func main() {
-	// Since it's called from the parent, the parent will pass the flags
-	proxy := proxy.New()
-	proxy.PairExternal() // optional
-	proxy.SetMessageOperations() // optional
-	proxy.SetHandleFunc()
-
-	// runChan blocks the service until proxy won't stop.
-	// In case if the proxy stopped with an error, the channel shall contain it.
-	// In case if the proxy closed by the destination, then it will return nil.
-	runChan, startErr := proxy.Start()
-	if startErr != nil {
-		panic(startErr)
-	}
-
-	err := <- runChan
-	if err != nil {
-		panic(err)
-	}
-}
-```
-
 ---
 
-# Proxy app
-
-Let's create `main.go` with the minimal *proxy*:
-
-```go
-package main
-
-import (
-	"github.com/ahmetson/service-lib"
-	log "github.com/ahmetson/log-lib"
-	"github.com/ahmetson/service-lib/configuration"
-	"github.com/ahmetson/service-lib/proxy"
-)
-
-func main() {
-	logger, _ := log.New("my-proxy", false)
-	appConfig, _ := configuration.New(logger)
-
-	// setup service
-	service := proxy.New(appConfig, logger.Child("proxy"))
-
-	// setup a default source
-	service.SetDefaultSource(configuration.ReplierType)
-	// or
-	// service.SetCustomSource(customController)
-
-	// destinations, handlers are part of the handler
-	service.Controller.RequireDestination(configuration.ReplierType)
-	service.Controller.SetRequestHandler()
-	service.Controller.SetReplyHandler()
-
-	// validate before running it
-	service.Prepare()
-
-	service.Run()
-}
-```
-
-> TODO
->
-> Before adding source, add the extensions
-> That means, we need to change the request handler, reply handler.
-> The handlers in the controller should receive extensions.
-> ```go
-> // List the dependency
-> //service.RequireExtension("")
-> ```
-
-All services start with the configuration setup.
-On `main.go` the configuration is set to `appConfig`.
-
-Then we do:
-* Initialize a new proxy
-* Set up: source, destination and handlers.
-* Prepare it by checking configurations.
-* Finally, we start the service: `service.Run()`
-
-## Source
-The *proxy controller* will add itself to *source* controller automatically.
-The handlers in the *proxy controller* should send the messages to *proxy controller*.
-
-### Custom Source
-The custom source controllers should implement the interface:
-`github.com/ahmetson/service-lib/controller.Interface`.
-
-> Check the example on https://github.com/ahmetson/web-proxy
-
-## Request Handler
-The request handler is the function of the type:
-
-`github.com/ahmetson/service-lib/proxy.RequestHandler`
-
-## Reply Handler
-
-> This is optional
-
-The reply handler is the function of the type:
-
-`github.com/ahmetson/service-lib/proxy.ReplyHandler`
+---
+need to add an easy way to see the status of the application
+Is it through meta
+Is it through logs with the progress? For example:
+service started
+service started proxy
+proxy started
+app is ready.
+Is it through the dashboard
