@@ -26,6 +26,7 @@ type Proxy struct {
 	onRequest       RequestHandleFunc
 	onReply         ReplyHandleFunc
 	handlerWrappers map[string]*HandlerWrapper
+	handlers        map[handlerConfig.HandlerType]func() base.Interface // todo add support of the trigger
 }
 
 type HandlerWrapper struct {
@@ -42,7 +43,23 @@ func NewProxy() (*Proxy, error) {
 
 	auxiliary.Type = service.ProxyType
 
-	return &Proxy{auxiliary, nil, nil, nil, nil, make(map[string]*HandlerWrapper)}, nil
+	handlers := make(map[handlerConfig.HandlerType]func() base.Interface, 0)
+	handlers[handlerConfig.SyncReplierType] = func() base.Interface {
+		return sync_replier.New()
+	}
+	handlers[handlerConfig.ReplierType] = func() base.Interface {
+		return replier.New()
+	}
+
+	return &Proxy{
+		auxiliary,
+		nil,
+		nil,
+		nil,
+		nil,
+		make(map[string]*HandlerWrapper),
+		handlers,
+	}, nil
 }
 
 // The routeWrapper is the proxy route that's invoked for all proxy units.
@@ -90,6 +107,10 @@ func (proxy *Proxy) routeWrapper(handlerId string, req message.RequestInterface)
 	parsedReply.SetConId(nextReq.ConId())
 
 	return parsedReply
+}
+
+func (proxy *Proxy) SetHandlerDefiner(handlerType handlerConfig.HandlerType, definer func() base.Interface) {
+	proxy.handlers[handlerType] = definer
 }
 
 // SetHandler is disabled as the proxy returns them from the parent
@@ -299,14 +320,15 @@ func (proxy *Proxy) lintHandlers() error {
 	})
 
 	for i := range handlerConfigs {
-		var h base.Interface
-		if handlerConfigs[i].Type == handlerConfig.SyncReplierType {
-			h = sync_replier.New()
-		} else if handlerConfigs[i].Type == handlerConfig.ReplierType {
-			h = replier.New()
-		} else {
-			return fmt.Errorf("the handler type '%s' not supported for proxy", handlerConfigs[i].Type)
+		definer, ok := proxy.handlers[handlerConfigs[i].Type]
+		if !ok {
+			unknown, unknownOk := proxy.handlers[handlerConfig.UnknownType]
+			if !unknownOk {
+				return fmt.Errorf("the handler config %d of %s type has no handler definer", i, handlerConfigs[i].Type)
+			}
+			definer = unknown
 		}
+		h := definer()
 		// todo use the proxy category; when generating a proxy parentId,
 		// it needs to over-write the generateConfig method of the parent to set a new parentId.
 		proxy.Auxiliary.SetHandler(proxy.id+handlerConfigs[i].Category, h)
