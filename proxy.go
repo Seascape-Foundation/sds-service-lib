@@ -2,8 +2,11 @@ package service
 
 import (
 	"fmt"
+	"github.com/ahmetson/client-lib"
 	clientConfig "github.com/ahmetson/client-lib/config"
 	"github.com/ahmetson/config-lib/service"
+	"github.com/ahmetson/datatype-lib/data_type/key_value"
+	"github.com/ahmetson/datatype-lib/message"
 	"github.com/ahmetson/handler-lib/base"
 	handlerConfig "github.com/ahmetson/handler-lib/config"
 	"github.com/ahmetson/handler-lib/replier"
@@ -12,11 +15,22 @@ import (
 	"sync"
 )
 
+type RequestHandleFunc = func(handlerId string, req message.RequestInterface) (message.RequestInterface, error)
+type ReplyHandleFunc = func(handlerId string, req message.RequestInterface, reply message.ReplyInterface) (message.ReplyInterface, error)
+
 // Proxy defines the parameters of the proxy parent
 type Proxy struct {
 	*Auxiliary
-	rule      *service.Rule // set it if this proxy is first in the chain
-	proxyConf *service.Proxy
+	rule            *service.Rule // set it if this proxy is first in the chain
+	proxyConf       *service.Proxy
+	onRequest       RequestHandleFunc
+	onReply         ReplyHandleFunc
+	handlerWrappers map[string]*HandlerWrapper
+}
+
+type HandlerWrapper struct {
+	destConfig *handlerConfig.Handler
+	destClient *client.Socket
 }
 
 // NewProxy proxy parent returned
@@ -28,11 +42,108 @@ func NewProxy() (*Proxy, error) {
 
 	auxiliary.Type = service.ProxyType
 
-	return &Proxy{auxiliary, nil, nil}, nil
+	return &Proxy{auxiliary, nil, nil, nil, nil, make(map[string]*HandlerWrapper)}, nil
+}
+
+// The routeWrapper is the proxy route that's invoked for all proxy units.
+// The route wrapper calls user functions for the requests or replies.
+func (proxy *Proxy) routeWrapper(handlerId string, req message.RequestInterface) message.ReplyInterface {
+	handlerWrapper, ok := proxy.handlerWrappers[handlerId]
+	if !ok {
+		return req.Fail(fmt.Sprintf("internal error, proxy.handlerWrappers[%s] not found", handlerId))
+	}
+
+	var nextReq message.RequestInterface
+	if proxy.onRequest != nil {
+		parsedReq, err := proxy.onRequest(handlerId, req)
+		// check failed
+		if err != nil {
+			return req.Fail(fmt.Sprintf("onRequest(%s): %v", handlerId, err))
+		}
+		nextReq = parsedReq
+		nextReq.SetConId(req.ConId())
+	} else {
+		nextReq = req
+	}
+	if !handlerConfig.CanReply(handlerWrapper.destConfig.Type) {
+		err := handlerWrapper.destClient.Submit(nextReq)
+		if err != nil {
+			return nextReq.Fail(fmt.Sprintf("handler %s not replieable, submit failed as for req %v: %v", handlerId, nextReq, err))
+		}
+		return nextReq.Ok(key_value.New())
+	}
+	reply, err := handlerWrapper.destClient.Request(nextReq)
+	if err != nil {
+		return nextReq.Fail(fmt.Sprintf("handlerWrapper.destClient(handlerId='%s', req=%v): %v", handlerId, nextReq, err))
+	}
+	if proxy.onReply == nil {
+		reply.SetConId(req.ConId())
+		return reply
+	}
+
+	parsedReply, err := proxy.onReply(handlerId, nextReq, reply)
+	// check failed
+	if err != nil {
+		return nextReq.Fail(fmt.Sprintf("onReply(handlerId='%s', 'request'='%v', reply='%v'): %v", handlerId,
+			req, reply, err))
+	}
+	parsedReply.SetConId(nextReq.ConId())
+
+	return parsedReply
 }
 
 // SetHandler is disabled as the proxy returns them from the parent
 func (proxy *Proxy) SetHandler(_ string, _ base.Interface) {}
+
+// SetRequestHandler sets the requests function defined by the user.
+func (proxy *Proxy) SetRequestHandler(onRequest RequestHandleFunc) error {
+	if proxy.onRequest != nil {
+		return fmt.Errorf("already set")
+	}
+	proxy.onRequest = onRequest
+	return nil
+}
+
+// SetReplyHandler sets the reply function defined by the user.
+func (proxy *Proxy) SetReplyHandler(onReply ReplyHandleFunc) error {
+	if proxy.onReply != nil {
+		return fmt.Errorf("already set")
+	}
+	proxy.onReply = onReply
+	return nil
+}
+
+// Todo maybe to call routeHandlers after setting the config?
+// So that handlers will have their own generated id?
+func (proxy *Proxy) routeHandlers(units []*service.Unit) error {
+	// Set up the route for each handler
+	for _, unitRef := range units {
+		// todo make sure if unit is changed, then unitRef is called by reference
+		unit := *unitRef // copy
+
+		handlerWrapper, ok := proxy.handlerWrappers[unit.HandlerId]
+		if !ok {
+			proxy.Logger.Warn("unit handler wrapper not found", "unit", unit, "handler wrappers", proxy.handlerWrappers,
+				"handlers", proxy.Handlers)
+			continue
+		}
+		category := proxy.id + handlerWrapper.destConfig.Category
+		handler, ok := proxy.Handlers[category].(base.Interface)
+		if !ok {
+			return fmt.Errorf(fmt.Sprintf("unit handler by category not found, category=%s, wrappers amount=%d, handler id='%s'",
+				category, len(proxy.handlerWrappers), unit.HandlerId))
+		}
+
+		err := handler.Route(unit.Command, func(request message.RequestInterface) message.ReplyInterface {
+			return proxy.routeWrapper(unit.HandlerId, request)
+		})
+		if err != nil {
+			return fmt.Errorf("handler.Route(unit=%v): %w", unit, err)
+		}
+	}
+
+	return nil
+}
 
 // The setProxyUnits prepares the proxy chains by fetching the proxies from the parent
 // and storing them in this proxy.
@@ -65,10 +176,15 @@ func (proxy *Proxy) setProxyUnits() error {
 
 		units, err := parentClient.Units(rule)
 		if err != nil {
-			return fmt.Errorf("parentClient.Units('%v'): %w", rule, err)
+			return fmt.Errorf("destClient.Units('%v'): %w", rule, err)
 		}
 		if err := proxyClient.SetUnits(rule, units); err != nil {
 			return fmt.Errorf("proxyClient.SetUnits('%v'): %w", rule, err)
+		}
+
+		err = proxy.routeHandlers(units)
+		if err != nil {
+			return fmt.Errorf("proxy.routeHandlers(rule='%v' from proxy chain=%v): %w", rule, proxyChain, err)
 		}
 	}
 
@@ -81,6 +197,11 @@ func (proxy *Proxy) setProxyUnits() error {
 		}
 		if err := proxyClient.SetUnits(rule, units); err != nil {
 			return fmt.Errorf("proxyClient.SetUnits('%v'): %w", rule, err)
+		}
+
+		err = proxy.routeHandlers(units)
+		if err != nil {
+			return fmt.Errorf("proxy.routeHandlers(rule='%v' from proxy.rule): %w", rule, err)
 		}
 	}
 
@@ -186,9 +307,24 @@ func (proxy *Proxy) lintHandlers() error {
 		} else {
 			return fmt.Errorf("the handler type '%s' not supported for proxy", handlerConfigs[i].Type)
 		}
-		// todo use the proxy category when generating a proxy parentId
+		// todo use the proxy category; when generating a proxy parentId,
 		// it needs to over-write the generateConfig method of the parent to set a new parentId.
-		proxy.Auxiliary.SetHandler(handlerConfigs[i].Category, h)
+		proxy.Auxiliary.SetHandler(proxy.id+handlerConfigs[i].Category, h)
+
+		// could lead to unexpected behavior if there are multiple urls
+		parentZmqType := handlerConfig.SocketType(handlerConfigs[i].Type)
+		parentClientConf := clientConfig.New(destination.Urls[0], handlerConfigs[i].Id, handlerConfigs[i].Port, parentZmqType)
+		parentClientConf.UrlFunc(clientConfig.Url)
+		parentClient, err := client.New(parentClientConf)
+		if err != nil {
+			return fmt.Errorf("client.New(parentClientConf='%v'): failed to create a destination socket: %w", *parentClientConf, err)
+		}
+
+		handlerWrapper := &HandlerWrapper{
+			destConfig: handlerConfigs[i],
+			destClient: parentClient,
+		}
+		proxy.handlerWrappers[handlerConfigs[i].Id] = handlerWrapper
 	}
 
 	return nil
