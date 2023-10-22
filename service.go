@@ -525,6 +525,9 @@ func (independent *Service) startHandlers() error {
 
 	for category, raw := range independent.Handlers {
 		handler := raw.(base.Interface)
+		if handler.Config() == nil {
+			return fmt.Errorf("handler of %s category not set, please call SetConfig of handler", category)
+		}
 		if err = independent.setHandlerClient(handler); err != nil {
 			err = fmt.Errorf("setHandlerClient('%s'): %w", category, err)
 			goto exitStartHandler
