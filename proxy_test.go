@@ -2,6 +2,7 @@ package service
 
 import (
 	"fmt"
+	"github.com/ahmetson/client-lib"
 	clientConfig "github.com/ahmetson/client-lib/config"
 	"github.com/ahmetson/config-lib/app"
 	"github.com/ahmetson/config-lib/service"
@@ -10,6 +11,7 @@ import (
 	"github.com/ahmetson/handler-lib/base"
 	handlerConfig "github.com/ahmetson/handler-lib/config"
 	"github.com/ahmetson/handler-lib/manager_client"
+	"github.com/ahmetson/handler-lib/replier"
 	"github.com/ahmetson/handler-lib/route"
 	"github.com/ahmetson/handler-lib/sync_replier"
 	"github.com/ahmetson/log-lib"
@@ -17,6 +19,7 @@ import (
 	"github.com/ahmetson/os-lib/path"
 	"github.com/ahmetson/service-lib/flag"
 	"github.com/ahmetson/service-lib/manager"
+	"github.com/pebbe/zmq4"
 	"github.com/stretchr/testify/suite"
 	win "os"
 	"path/filepath"
@@ -45,6 +48,15 @@ type TestProxySuite struct {
 	defaultHandleFunc route.HandleFunc0
 	cmd1              string
 	handlerCategory   string
+
+	backend      *zmq4.Socket
+	workerResult string
+	replied      string
+	request      string
+
+	categories     []string
+	units          []*service.Unit
+	handlerConfigs []*handlerConfig.Handler
 }
 
 // SetupTest prepares the following:
@@ -88,14 +100,12 @@ func (test *TestProxySuite) SetupTest() {
 }
 
 func (test *TestProxySuite) TearDownTest() {
-	//s := test.Suite.Require
+	test.units = []*service.Unit{}
+	test.handlerConfigs = []*handlerConfig.Handler{}
 }
 
 func (test *TestProxySuite) mockedProxyChainsByLastProxy(req message.RequestInterface) message.ReplyInterface {
-	fmt.Printf("test.mockedProxyChainsByLastProxy entered\n")
-
 	id, err := req.RouteParameters().StringValue("id")
-	fmt.Printf("test.mockedProxyChainsByLastProxy params, id='%s', err: %v\n", id, err)
 	if err != nil {
 		return req.Fail("id parameter is missing")
 	}
@@ -105,8 +115,6 @@ func (test *TestProxySuite) mockedProxyChainsByLastProxy(req message.RequestInte
 		return req.Ok(key_value.New().Set("proxy_chains", proxyChains))
 	}
 
-	fmt.Printf("test.mockedProxyChainsByLastProxy convert ProxyChain to KeyValue\n")
-
 	for i := range test.parentProxyChains {
 		kv, err := key_value.NewFromInterface(test.parentProxyChains[i])
 		if err != nil {
@@ -114,14 +122,11 @@ func (test *TestProxySuite) mockedProxyChainsByLastProxy(req message.RequestInte
 		}
 		proxyChains = append(proxyChains, kv)
 	}
-	fmt.Printf("test.mockedProxyChainsByLastProxy proxy chains to return: %v\n", proxyChains)
 
 	return req.Ok(key_value.New().Set("proxy_chains", proxyChains))
 }
 
 func (test *TestProxySuite) mockedHandlersByRuleEmpty(req message.RequestInterface) message.ReplyInterface {
-	fmt.Printf("test.mockedHandlersByRuleEmpty entered\n")
-
 	kvs := make([]key_value.KeyValue, 0)
 
 	return req.Ok(key_value.New().Set("handler_configs", kvs))
@@ -129,8 +134,6 @@ func (test *TestProxySuite) mockedHandlersByRuleEmpty(req message.RequestInterfa
 
 func (test *TestProxySuite) mockedHandlersByRuleTriggers(req message.RequestInterface) message.ReplyInterface {
 	s := test.Require
-
-	fmt.Printf("test.mockedHandlersByRuleTriggers entered\n")
 
 	kvs := make([]key_value.KeyValue, 2)
 
@@ -154,10 +157,26 @@ func (test *TestProxySuite) mockedHandlersByRuleTriggers(req message.RequestInte
 	return req.Ok(key_value.New().Set("handler_configs", kvs))
 }
 
+func (test *TestProxySuite) newHandlers() {
+	s := test.Require
+
+	test.categories = []string{"sync_replier", "replier", "pair"}
+
+	conf1, err := handlerConfig.NewHandler(handlerConfig.SyncReplierType, test.categories[0])
+	s().NoError(err)
+	conf2, err := handlerConfig.NewHandler(handlerConfig.ReplierType, test.categories[1])
+	s().NoError(err)
+	conf3, err := handlerConfig.NewHandler(handlerConfig.SyncReplierType, test.categories[2])
+	s().NoError(err)
+	test.handlerConfigs = []*handlerConfig.Handler{conf1, conf2, conf3}
+}
+
 func (test *TestProxySuite) mockedHandlersByRule(req message.RequestInterface) message.ReplyInterface {
 	s := test.Require
 
-	fmt.Printf("test.mockedHandlersByRule entered\n")
+	if len(test.handlerConfigs) == 0 {
+		test.newHandlers()
+	}
 
 	ruleKv, err := req.RouteParameters().NestedValue("rule")
 	if err != nil {
@@ -182,18 +201,11 @@ func (test *TestProxySuite) mockedHandlersByRule(req message.RequestInterface) m
 
 	kvs := make([]key_value.KeyValue, 0, 3)
 
-	conf1, err := handlerConfig.NewHandler(handlerConfig.SyncReplierType, categories[0])
+	kv1, err := key_value.NewFromInterface(test.handlerConfigs[0])
 	s().NoError(err)
-	conf2, err := handlerConfig.NewHandler(handlerConfig.ReplierType, categories[1])
+	kv2, err := key_value.NewFromInterface(test.handlerConfigs[1])
 	s().NoError(err)
-	conf3, err := handlerConfig.NewHandler(handlerConfig.SyncReplierType, categories[2])
-	s().NoError(err)
-
-	kv1, err := key_value.NewFromInterface(conf1)
-	s().NoError(err)
-	kv2, err := key_value.NewFromInterface(conf2)
-	s().NoError(err)
-	kv3, err := key_value.NewFromInterface(conf3)
+	kv3, err := key_value.NewFromInterface(test.handlerConfigs[2])
 	s().NoError(err)
 
 	if len(rule.Categories) == 0 {
@@ -215,11 +227,31 @@ func (test *TestProxySuite) mockedHandlersByRule(req message.RequestInterface) m
 
 // Test lintUnits when units are empty
 func (test *TestProxySuite) mockedEmptyUnits(req message.RequestInterface) message.ReplyInterface {
-	fmt.Printf("test.mockedHandlersByRuleEmpty entered\n")
-
 	kvs := make([]key_value.KeyValue, 0)
 
 	return req.Ok(key_value.New().Set("units", kvs))
+}
+
+func (test *TestProxySuite) newUnits() {
+	if len(test.handlerConfigs) == 0 {
+		test.newHandlers()
+	}
+	conf1 := service.Unit{
+		ServiceId: test.parentId,
+		HandlerId: test.handlerConfigs[0].Id,
+		Command:   "hello",
+	}
+	conf2 := service.Unit{
+		ServiceId: test.parentId,
+		HandlerId: test.handlerConfigs[1].Id,
+		Command:   "world",
+	}
+	conf3 := service.Unit{
+		ServiceId: test.parentId,
+		HandlerId: test.handlerConfigs[2].Id,
+		Command:   "hello",
+	}
+	test.units = []*service.Unit{&conf1, &conf2, &conf3}
 }
 
 // Has the four rules:
@@ -230,6 +262,10 @@ func (test *TestProxySuite) mockedEmptyUnits(req message.RequestInterface) messa
 //	Route Rule for the test.parentUrl all routes.
 func (test *TestProxySuite) mockedUnits(req message.RequestInterface) message.ReplyInterface {
 	s := test.Require
+
+	if len(test.units) == 0 {
+		test.newUnits()
+	}
 
 	raw, err := req.RouteParameters().NestedValue("rule")
 	if err != nil {
@@ -244,27 +280,11 @@ func (test *TestProxySuite) mockedUnits(req message.RequestInterface) message.Re
 
 	kvs := make([]key_value.KeyValue, 0, 3)
 
-	conf1 := service.Unit{
-		ServiceId: test.parentId,
-		HandlerId: "sync_replier",
-		Command:   "hello",
-	}
-	conf2 := service.Unit{
-		ServiceId: test.parentId,
-		HandlerId: "sync_replier",
-		Command:   "world",
-	}
-	conf3 := service.Unit{
-		ServiceId: test.parentId,
-		HandlerId: "replier",
-		Command:   "hello",
-	}
-
-	kv1, err := key_value.NewFromInterface(conf1)
+	kv1, err := key_value.NewFromInterface(test.units[0])
 	s().NoError(err)
-	kv2, err := key_value.NewFromInterface(conf2)
+	kv2, err := key_value.NewFromInterface(test.units[1])
 	s().NoError(err)
-	kv3, err := key_value.NewFromInterface(conf3)
+	kv3, err := key_value.NewFromInterface(test.units[2])
 	s().NoError(err)
 
 	if rule.IsService() && rule.Urls[0] == test.parentUrl {
@@ -310,6 +330,42 @@ func (test *TestProxySuite) newMockedServiceManager(managerConfig *clientConfig.
 	}
 
 	return syncReplier, c, nil
+}
+
+func (test *TestProxySuite) runBackend(amount int, url string, zmqType zmq4.Type) {
+	require := test.Require
+
+	var err error
+	test.backend, err = zmq4.NewSocket(zmqType)
+	require().NoError(err)
+
+	err = test.backend.Bind(url)
+	require().NoError(err)
+
+	for i := 1; i <= amount; i++ {
+		msg, err := test.backend.RecvMessage(0)
+		if err == zmq4.ErrorSocketClosed {
+			return
+		}
+		require().NoError(err)
+
+		if zmqType == zmq4.PULL {
+			test.workerResult = fmt.Sprintf("%d", i)
+			continue
+		}
+		req, err := message.NewReq(msg)
+		require().NoError(err)
+		reply := req.Ok(req.RouteParameters().Set("backend", true))
+		replyStr, err := reply.ZmqEnvelope()
+		require().NoError(err)
+		_, err = test.backend.SendMessage(replyStr)
+		require().NoError(err)
+	}
+
+	err = test.backend.Close()
+	require().NoError(err)
+
+	test.backend = nil
 }
 
 // Test_10_NewProxy tests NewProxy
@@ -658,7 +714,6 @@ func (test *TestProxySuite) Test_13_Proxy_lintHandlers() {
 
 	rule = service.NewServiceDestination([]string{"no_url_1", "no_url_2"})
 	proxy.rule = rule
-	fmt.Printf("rule is nil? %v, the proxy rule is nil? %v of %v\n", rule, proxy.rule == nil, proxy)
 	err = proxy.lintHandlers()
 	s().Error(err)
 
@@ -684,11 +739,9 @@ func (test *TestProxySuite) Test_13_Proxy_lintHandlers() {
 	// 3.4 success
 	// by handler rule, a one category
 	proxy.Handlers = key_value.New() // clean out
-	fmt.Printf("3.4 before linting: %d\n", len(proxy.Handlers))
 	proxy.rule = service.NewHandlerDestination(parentService.Url, "sync_replier")
 	err = proxy.lintHandlers()
 	s().NoError(err)
-	fmt.Printf("3.4 after linting: %d\n", len(proxy.Handlers))
 	s().Len(proxy.Handlers, 1)
 
 	// fetch all handlers
@@ -793,6 +846,8 @@ func (test *TestProxySuite) Test_14_Proxy_setProxyUnits() {
 	err = proxy.ctx.Close()
 	s().NoError(err)
 
+	test.units = []*service.Unit{}
+
 	// Wait a bit for closing the threads
 	time.Sleep(time.Millisecond * 100)
 }
@@ -867,11 +922,569 @@ func (test *TestProxySuite) Test_15_Proxy_Start() {
 	err = proxy.manager.Close()
 	s().NoError(err)
 
+	test.units = []*service.Unit{}
+	test.handlerConfigs = []*handlerConfig.Handler{}
+
 	// Wait a bit for close of the threads
 	time.Sleep(time.Millisecond * 100)
 }
 
-// Todo test start with multiple proxies.
+// Test_16_HandleFunctions tests that handle functions in the proxy works
+//
+// Todo test with the submits if the handler is the puller
+func (test *TestProxySuite) Test_16_Proxy_routeWrapper() {
+	s := test.Require
+
+	helloWrapper := &HandlerWrapper{}
+	helloId := "hello"
+
+	parentService := test.parentConfig.Service(test.parentId)
+	s().NotNil(parentService)
+	parentManager := parentService.Manager
+	parentManager.UrlFunc(clientConfig.Url)
+	parentKv, err := key_value.NewFromInterface(parentManager)
+	s().NoError(err)
+
+	//mockedManager, mockedConfig, err := test.newMockedServiceManager(parentManager)
+	//s().NoError(err)
+
+	win.Args = append(win.Args,
+		arg.NewFlag(flag.IdFlag, test.id),
+		arg.NewFlag(flag.UrlFlag, test.url),
+		arg.NewFlag(flag.ParentFlag, parentKv.String()),
+	)
+
+	// let's create our proxy
+	proxy, err := NewProxy()
+	s().NoError(err)
+	DeleteLastFlags(3)
+
+	// fail as proxy.handleWrappers == empty
+	reply := proxy.routeWrapper(helloId, &message.Request{})
+	s().False(reply.IsOK())
+
+	// fail if proxy.handleWrappers[non_existing_id]
+	proxy.handlerWrappers[helloId] = helloWrapper
+	reply = proxy.routeWrapper("non_existing", &message.Request{})
+	s().False(reply.IsOK())
+
+	// set the proxy type as submitting (create a handler of trigger type)
+	// make sure that reply is ok, but has no parameter
+	workerConf := handlerConfig.NewInternalHandler(handlerConfig.WorkerType, "sample_worker")
+	workerZmqType := handlerConfig.SocketType(workerConf.Type)
+	pusherConf := clientConfig.New("", workerConf.Id, workerConf.Port, workerZmqType)
+	pusherConf.UrlFunc(clientConfig.Url)
+	pusher, err := client.New(pusherConf)
+	s().NoError(err)
+	workerUrl := handlerConfig.ExternalUrl(pusherConf.Id, pusherConf.Port)
+
+	// worker closes after workAmount.
+	// 1. to test submit purely
+	// 2. to test onReply have no effect
+	// test onRequest with intentional error is not submitting, so skip it
+	// 3. to test onRequest without any error
+	workAmount := 3
+	go test.runBackend(workAmount, workerUrl, workerZmqType)
+	time.Sleep(time.Millisecond * 100) // wait a bit for backend initialization
+
+	helloWrapper.destConfig = workerConf
+	helloWrapper.destClient = pusher
+	proxy.handlerWrappers[helloId] = helloWrapper
+
+	s().Empty(test.workerResult)
+	reply = proxy.routeWrapper(helloId, &message.Request{Command: "cmd", Parameters: key_value.New()})
+	s().True(reply.IsOK())
+
+	// Wait a bit for the effect
+	time.Sleep(time.Millisecond * 100)
+	s().NotEmpty(test.workerResult)
+	test.workerResult = ""
+
+	// onReply call is tracked by setting a string on test.replied
+	// setting onReply won't take any effect
+	proxy.onReply = func(handlerId string, req message.RequestInterface, rep message.ReplyInterface) (message.ReplyInterface, error) {
+		test.replied = "handler_id_1"
+		return rep, nil
+	}
+	s().Empty(test.replied)
+
+	reply = proxy.routeWrapper(helloId, &message.Request{Command: "cmd", Parameters: key_value.New()})
+	s().True(reply.IsOK())
+	time.Sleep(time.Millisecond * 100) // wait a bit for sending
+
+	s().Empty(test.replied)
+	s().NotEmpty(test.workerResult)
+	test.workerResult = ""
+
+	// onRequest that fails must not submit the message
+	proxy.onRequest = func(handlerId string, req message.RequestInterface) (message.RequestInterface, error) {
+		test.request = "on_request_failed"
+		return nil, fmt.Errorf("intentionally failed")
+	}
+	s().Empty(test.request)
+
+	reply = proxy.routeWrapper(helloId, &message.Request{Command: "cmd", Parameters: key_value.New()})
+	s().False(reply.IsOK()) // we get it immediately
+
+	s().Empty(test.replied)
+	s().Empty(test.workerResult)
+	s().Equal("on_request_failed", test.request)
+	test.request = ""
+
+	// request must over-write the next
+	proxy.onRequest = func(handlerId string, req message.RequestInterface) (message.RequestInterface, error) {
+		test.request = "on_request_succeed"
+		return req, nil
+	}
+	s().Empty(test.request)
+
+	reply = proxy.routeWrapper(helloId, &message.Request{Command: "cmd", Parameters: key_value.New()})
+	s().True(reply.IsOK())
+
+	// test a bit for the submission to get effect by the handler
+	time.Sleep(time.Millisecond * 100)
+
+	s().Empty(test.replied)
+	s().NotEmpty(test.workerResult)
+	s().Equal("on_request_succeed", test.request)
+	test.request = ""
+	test.workerResult = ""
+
+	// close the submission and use a sync replier handler as a destination
+	// Clean out for submitting
+	if test.backend != nil {
+		s().NoError(test.backend.Close())
+	}
+
+	err = helloWrapper.destClient.Close()
+	s().NoError(err)
+
+	// change the helloWrapper.destConf to a request
+	// create a sync_replier and request dest client
+	replierConf := handlerConfig.NewInternalHandler(handlerConfig.SyncReplierType, "sample_sync_replier")
+	replierZmqType := handlerConfig.SocketType(replierConf.Type)
+	reqConf := clientConfig.New("", replierConf.Id, replierConf.Port, replierZmqType)
+	reqConf.UrlFunc(clientConfig.Url)
+	reqClient, err := client.New(reqConf)
+	s().NoError(err)
+	replierUrl := handlerConfig.ExternalUrl(reqConf.Id, reqConf.Port)
+
+	// 1. Normal request without onReply and onRequest
+	// - onRequest fails it's not counted
+	// 2. Normal onRequest
+	// 3. onReply fails
+	// 4. onReply succeeds
+	replyAmount := 4
+	go test.runBackend(replyAmount, replierUrl, replierZmqType)
+	time.Sleep(time.Millisecond * 100) // wait a bit for backend initialization
+
+	helloWrapper.destConfig = replierConf
+	helloWrapper.destClient = reqClient
+	proxy.handlerWrappers[helloId] = helloWrapper
+
+	s().Empty(test.workerResult)
+	proxy.onRequest = nil
+	proxy.onReply = nil
+	reply = proxy.routeWrapper(helloId, &message.Request{Command: "cmd", Parameters: key_value.New()})
+	s().True(reply.IsOK())
+	response, err := reply.ReplyParameters().BoolValue("backend")
+	s().NoError(err)
+	s().True(response)
+
+	// Request must fail intentionally
+	proxy.onRequest = func(handlerId string, req message.RequestInterface) (message.RequestInterface, error) {
+		test.request = "on_request_failed"
+		return nil, fmt.Errorf("failed intentionally")
+	}
+	s().Empty(test.request)
+	reply = proxy.routeWrapper(helloId, &message.Request{Command: "cmd", Parameters: key_value.New()})
+	s().False(reply.IsOK())
+	s().Equal("on_request_failed", test.request)
+	s().Len(reply.ReplyParameters(), 0)
+	test.request = ""
+
+	// Request succeeds
+	proxy.onRequest = func(handlerId string, req message.RequestInterface) (message.RequestInterface, error) {
+		test.request = "on_request_succeed"
+		req.RouteParameters().Set("on_request", true)
+		return req, nil
+	}
+	s().Empty(test.request)
+	reply = proxy.routeWrapper(helloId, &message.Request{Command: "cmd", Parameters: key_value.New()})
+	s().True(reply.IsOK())
+	s().Equal("on_request_succeed", test.request)
+	test.request = ""
+	// the destination added the parameters
+	response, err = reply.ReplyParameters().BoolValue("backend")
+	s().NoError(err)
+	s().True(response)
+	// the onRequest added the parameters
+	response, err = reply.ReplyParameters().BoolValue("on_request")
+	s().NoError(err)
+	s().True(response)
+
+	// On reply fails intentionally
+	proxy.onReply = func(handlerId string, req message.RequestInterface, rep message.ReplyInterface) (message.ReplyInterface, error) {
+		test.replied = "on_reply_failed"
+		return nil, fmt.Errorf("failed intentionally")
+	}
+	s().Empty(test.replied)
+	s().Empty(test.request)
+	reply = proxy.routeWrapper(helloId, &message.Request{Command: "cmd", Parameters: key_value.New()})
+	s().False(reply.IsOK())
+	s().Equal("on_request_succeed", test.request)
+	s().Equal("on_reply_failed", test.replied)
+	test.request = ""
+	test.replied = ""
+
+	// onReply succeeds intentionally
+	proxy.onReply = func(handlerId string, req message.RequestInterface, rep message.ReplyInterface) (message.ReplyInterface, error) {
+		test.replied = "on_reply_succeed"
+		rep.ReplyParameters().Set("on_reply", true)
+		return rep, nil
+	}
+	s().Empty(test.replied)
+	s().Empty(test.request)
+	reply = proxy.routeWrapper(helloId, &message.Request{Command: "cmd", Parameters: key_value.New()})
+	s().True(reply.IsOK())
+	s().Equal("on_request_succeed", test.request)
+	s().Equal("on_reply_succeed", test.replied)
+	test.request = ""
+	test.replied = ""
+	// the destination added the parameters
+	response, err = reply.ReplyParameters().BoolValue("backend")
+	s().NoError(err)
+	s().True(response)
+	// the onRequest added the parameters
+	response, err = reply.ReplyParameters().BoolValue("on_request")
+	s().NoError(err)
+	s().True(response)
+	// the onReply added the parameters
+	response, err = reply.ReplyParameters().BoolValue("on_reply")
+	s().NoError(err)
+	s().True(response)
+
+	// Clean out for request
+	if test.backend != nil {
+		s().NoError(test.backend.Close())
+	}
+
+	err = helloWrapper.destClient.Close()
+	s().NoError(err)
+
+	err = proxy.ctx.Close()
+	s().NoError(err)
+
+	// Wait a bit for close of the threads
+	time.Sleep(time.Millisecond * 100)
+}
+
+// Test_17_Proxy_routeHandlers test routeHandlers by applying handler calls for each unit
+func (test *TestProxySuite) Test_17_Proxy_routeHandlers() {
+	s := test.Require
+
+	test.newHandlers()
+	test.newUnits()
+
+	// Deriving the parent's manager configuration
+	// from _test_services/proxy_parent/backend/bin/app.yml
+	parentService := test.parentConfig.Service(test.parentId)
+	s().NotNil(parentService)
+	parentManager := parentService.Manager
+	parentManager.UrlFunc(clientConfig.Url)
+	parentKv, err := key_value.NewFromInterface(parentManager)
+	s().NoError(err)
+
+	mockedManager, mockedConfig, err := test.newMockedServiceManager(parentManager)
+	s().NoError(err)
+
+	// start the handlers for the parent
+	parent0Handler := sync_replier.New()
+	parent0Handler.SetConfig(test.handlerConfigs[0])
+	err = parent0Handler.SetLogger(test.logger)
+	s().NoError(err)
+	err = parent0Handler.Route(test.units[0].Command, func(req message.RequestInterface) message.ReplyInterface {
+		params := req.RouteParameters().Set("parent_command", req.CommandName()).Set("handler_index", 0)
+		return req.Ok(params)
+	})
+	s().NoError(err)
+
+	parent1Handler := replier.New()
+	parent1Handler.SetConfig(test.handlerConfigs[1])
+	err = parent1Handler.SetLogger(test.logger)
+	s().NoError(err)
+	err = parent1Handler.Route(test.units[1].Command, func(req message.RequestInterface) message.ReplyInterface {
+		params := req.RouteParameters().Set("parent_command", req.CommandName()).Set("handler_index", 1)
+		return req.Ok(params)
+	})
+	s().NoError(err)
+
+	parent2Handler := sync_replier.New()
+	parent2Handler.SetConfig(test.handlerConfigs[2])
+	err = parent2Handler.SetLogger(test.logger)
+	s().NoError(err)
+	err = parent2Handler.Route(test.units[2].Command, func(req message.RequestInterface) message.ReplyInterface {
+		params := req.RouteParameters().Set("parent_command", req.CommandName()).Set("handler_index", 2)
+		return req.Ok(params)
+	})
+	s().NoError(err)
+
+	err = parent0Handler.Start()
+	s().NoError(err)
+	err = parent1Handler.Start()
+	s().NoError(err)
+	err = parent2Handler.Start()
+	s().NoError(err)
+
+	// Wait a bit for initialization
+	time.Sleep(time.Millisecond * 100)
+
+	// Let's over-write the routing for the handlers.
+
+	err = mockedManager.Route(manager.Units, test.mockedUnits)
+	s().NoError(err)
+	err = mockedManager.Route(manager.ProxyConfigSet, test.mockedEmptyUnits)
+	s().NoError(err)
+	err = mockedManager.Route(manager.HandlersByRule, test.mockedHandlersByRule)
+	s().NoError(err)
+
+	err = mockedManager.Start()
+	s().NoError(err)
+
+	// wait a bit for initialization
+	time.Sleep(time.Millisecond * 100)
+
+	win.Args = append(win.Args,
+		arg.NewFlag(flag.IdFlag, test.id),
+		arg.NewFlag(flag.UrlFlag, test.url),
+		arg.NewFlag(flag.ParentFlag, parentKv.String()),
+	)
+
+	// let's create our proxy
+	proxy, err := NewProxy()
+	s().NoError(err)
+	DeleteLastFlags(3)
+
+	//// init the config
+	proxy.ctx.SetService(test.id, test.url)
+	err = proxy.ctx.StartDepManager()
+	s().NoError(err)
+	err = proxy.ctx.StartProxyHandler()
+	s().NoError(err)
+
+	// wait a bit for initialization
+	time.Sleep(time.Millisecond * 100)
+
+	// No handlers
+	s().Len(proxy.Handlers, 0)
+
+	rule := service.NewServiceDestination(parentService.Url)
+	proxy.rule = rule // available in the proxy as proxy.destination()
+
+	err = proxy.SetReplyHandler(func(handlerId string, req message.RequestInterface, rep message.ReplyInterface) (message.ReplyInterface, error) {
+		for key, value := range req.RouteParameters() {
+			rep.ReplyParameters().Set(key, value)
+		}
+		rep.ReplyParameters().Set("reply_handler_id", handlerId).Set("reply_command", req.CommandName())
+		return rep, nil
+	})
+	s().NoError(err)
+	err = proxy.SetRequestHandler(func(handlerId string, req message.RequestInterface) (message.RequestInterface, error) {
+		req.RouteParameters().Set("request_handler_id", handlerId).Set("request_command", req.CommandName())
+		return req, nil
+	})
+	s().NoError(err)
+
+	// prepare the parent data
+	s().Empty(proxy.Handlers)
+	s().Empty(proxy.handlerWrappers)
+
+	err = proxy.lintProxyChain()
+	s().NoError(err)
+	err = proxy.lintHandlers()
+	s().NoError(err)
+	err = proxy.setProxyUnits() // calls routeHandlers
+	s().NoError(err)
+
+	time.Sleep(time.Millisecond * 100)
+
+	s().NotEmpty(proxy.Handlers)
+	s().NotEmpty(proxy.handlerWrappers)
+	raw, ok := proxy.Handlers[test.id+test.categories[0]]
+	s().True(ok)
+	handler := raw.(base.Interface)
+	s().NotEmpty(handler.RouteCommands())
+
+	// Generate the configuration
+	err = proxy.setConfig()
+	s().NoError(err)
+	err = proxy.newManager()
+	s().NoError(err)
+
+	// Wait a bit for proxy preparation
+	time.Sleep(time.Millisecond * 100)
+
+	// Proxy handlers must run too
+	err = proxy.startHandlers()
+	s().NoError(err)
+
+	raw, ok = proxy.Handlers[test.id+test.categories[0]]
+	s().True(ok)
+	handler = raw.(base.Interface)
+	s().NotEmpty(handler.RouteCommands())
+	proxyHandlerConf1 := handler.Config()
+
+	// Wait a bit for proxy preparation
+	clientConf1 := clientConfig.New(test.parentUrl, proxyHandlerConf1.Id, proxyHandlerConf1.Port, handlerConfig.SocketType(proxyHandlerConf1.Type))
+	clientConf1.UrlFunc(clientConfig.Url)
+	client1, err := client.New(clientConf1)
+	s().NoError(err)
+
+	raw, ok = proxy.Handlers[test.id+test.categories[1]]
+	s().True(ok)
+	handler = raw.(base.Interface)
+	s().NotEmpty(handler.RouteCommands())
+	proxyHandlerConf2 := handler.Config()
+	clientConf2 := clientConfig.New(test.parentUrl, proxyHandlerConf2.Id, proxyHandlerConf2.Port, handlerConfig.SocketType(proxyHandlerConf2.Type))
+	clientConf2.UrlFunc(clientConfig.Url)
+	client2, err := client.New(clientConf2)
+	//req to router doesn't work, test it
+	s().NoError(err)
+
+	raw, ok = proxy.Handlers[test.id+test.categories[2]]
+	s().True(ok)
+	handler = raw.(base.Interface)
+	s().NotEmpty(handler.RouteCommands())
+	proxyHandlerConf3 := handler.Config()
+	clientConf3 := clientConfig.New(test.parentUrl, proxyHandlerConf3.Id, proxyHandlerConf3.Port, handlerConfig.SocketType(proxyHandlerConf3.Type))
+	clientConf3.UrlFunc(clientConfig.Url)
+	client3, err := client.New(clientConf3)
+	s().NoError(err)
+
+	// Sending a message that is not registered
+	req := message.Request{
+		Command:    "non_exist",
+		Parameters: key_value.New(),
+	}
+	reply, err := client1.Request(&req)
+	s().NoError(err)
+	s().False(reply.IsOK())
+	reply, err = client2.Request(&req)
+	s().NoError(err)
+	s().False(reply.IsOK())
+	reply, err = client3.Request(&req)
+	s().NoError(err)
+	s().False(reply.IsOK())
+
+	// Sending a message to the handler first through the proxy
+	i := 0
+	req = message.Request{
+		Command:    test.units[i].Command,
+		Parameters: key_value.New(),
+	}
+	reply, err = client1.Request(&req)
+	s().NoError(err)
+	s().True(reply.IsOK())
+	parentCmd, err := reply.ReplyParameters().StringValue("parent_command")
+	s().NoError(err)
+	s().Equal(test.units[i].Command, parentCmd)
+	onRequestCmd, err := reply.ReplyParameters().StringValue("request_command")
+	s().NoError(err)
+	s().Equal(test.units[i].Command, onRequestCmd)
+	onReplyCmd, err := reply.ReplyParameters().StringValue("reply_command")
+	s().NoError(err)
+	s().Equal(test.units[i].Command, onReplyCmd)
+
+	// Sending a message to the second handler through the proxy
+	i++
+	req = message.Request{
+		Command:    test.units[i].Command,
+		Parameters: key_value.New(),
+	}
+	reply, err = client2.Request(&req)
+	s().NoError(err)
+	s().True(reply.IsOK())
+
+	parentCmd, err = reply.ReplyParameters().StringValue("parent_command")
+	s().NoError(err)
+	s().Equal(test.units[i].Command, parentCmd)
+	onRequestCmd, err = reply.ReplyParameters().StringValue("request_command")
+	s().NoError(err)
+	s().Equal(test.units[i].Command, onRequestCmd)
+	onReplyCmd, err = reply.ReplyParameters().StringValue("reply_command")
+	s().NoError(err)
+	s().Equal(test.units[i].Command, onReplyCmd)
+
+	// Sending a message to the third handler through the proxy
+	i++
+	req = message.Request{
+		Command:    test.units[i].Command,
+		Parameters: key_value.New(),
+	}
+	reply, err = client3.Request(&req)
+	s().NoError(err)
+	s().True(reply.IsOK())
+
+	parentCmd, err = reply.ReplyParameters().StringValue("parent_command")
+	s().NoError(err)
+	s().Equal(test.units[i].Command, parentCmd)
+	onRequestCmd, err = reply.ReplyParameters().StringValue("request_command")
+	s().NoError(err)
+	s().Equal(test.units[i].Command, onRequestCmd)
+	onReplyCmd, err = reply.ReplyParameters().StringValue("reply_command")
+	s().NoError(err)
+	s().Equal(test.units[i].Command, onReplyCmd)
+
+	// Clean out
+	mockedManagerClient, err := manager_client.New(mockedConfig)
+	s().NoError(err)
+
+	err = mockedManagerClient.Close()
+	s().NoError(err)
+
+	err = proxy.ctx.Close()
+	s().NoError(err)
+
+	parent0Client, err := manager_client.New(test.handlerConfigs[0])
+	s().NoError(err)
+	err = parent0Client.Close()
+	s().NoError(err)
+
+	parent1Client, err := manager_client.New(test.handlerConfigs[1])
+	s().NoError(err)
+	err = parent1Client.Close()
+	s().NoError(err)
+
+	parent2Client, err := manager_client.New(test.handlerConfigs[2])
+	s().NoError(err)
+	err = parent2Client.Close()
+	s().NoError(err)
+
+	err = client1.Close()
+	s().NoError(err)
+	err = client2.Close()
+	s().NoError(err)
+	err = client3.Close()
+	s().NoError(err)
+
+	proxyHandler1, err := manager_client.New(proxyHandlerConf1)
+	s().NoError(err)
+	err = proxyHandler1.Close()
+	s().NoError(err)
+
+	proxyHandler2, err := manager_client.New(proxyHandlerConf2)
+	s().NoError(err)
+	err = proxyHandler2.Close()
+	s().NoError(err)
+
+	proxyHandler3, err := manager_client.New(proxyHandlerConf3)
+	s().NoError(err)
+	err = proxyHandler3.Close()
+	s().NoError(err)
+
+	// Wait a bit for closing the threads
+	time.Sleep(time.Millisecond * 100)
+}
 
 func TestProxy(t *testing.T) {
 	suite.Run(t, new(TestProxySuite))
