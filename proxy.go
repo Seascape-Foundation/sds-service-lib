@@ -77,7 +77,7 @@ func (proxy *Proxy) setProxyUnits() error {
 
 		units, err := parentClient.Units(rule)
 		if err != nil {
-			return fmt.Errorf("parentClient.Units('%v'): %w", rule, err)
+			return fmt.Errorf("destClient.Units('%v'): %w", rule, err)
 		}
 		if err := proxyClient.SetUnits(rule, units); err != nil {
 			return fmt.Errorf("proxyClient.SetUnits('%v'): %w", rule, err)
