@@ -653,7 +653,7 @@ errOccurred:
 			err = fmt.Errorf("%v: ctx.Close: %w", err, closeErr)
 		}
 
-		if independent.manager.Running() {
+		if independent.manager != nil && independent.manager.Running() {
 			closeErr := independent.manager.Close()
 			if closeErr != nil {
 				err = fmt.Errorf("%v: manager.Close: %w", err, closeErr)
