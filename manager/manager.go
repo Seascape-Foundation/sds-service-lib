@@ -174,7 +174,7 @@ func (m *Manager) onProxyChainsByLastProxy(req message.RequestInterface) message
 func (m *Manager) onUnits(req message.RequestInterface) message.ReplyInterface {
 	raw, err := req.RouteParameters().NestedValue("rule")
 	if err != nil {
-		return req.Fail(fmt.Sprintf("req.RouteParameters().NestedValue('proxy_chain'): %v", err))
+		return req.Fail(fmt.Sprintf("req.RouteParameters().NestedValue('rule'): %v", err))
 	}
 
 	var rule serviceConfig.Rule
