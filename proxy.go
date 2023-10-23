@@ -389,6 +389,15 @@ func (proxy *Proxy) Start() (*sync.WaitGroup, error) {
 	if err != nil {
 		return nil, fmt.Errorf("proxy.lintHandlers: %w", err)
 	}
+	if err = proxy.setConfig(); err != nil {
+		return nil, fmt.Errorf("proxy.SetConfig: %w", err)
+	}
+
+	// get the proxies from the proxy chain for this service.
+	// must be called before starting handlers, as routing of the handlers maybe set by proxy units.
+	if err = proxy.setProxyUnits(); err != nil {
+		return nil, fmt.Errorf("proxy.setProxyUnits: %w", err)
+	}
 
 	// todo call the setConfig first then invoke the ParentManager.SetProxyChain
 	// then start the auxiliary.
